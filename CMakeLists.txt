@@ -24,11 +24,14 @@ catkin_package()
 
 # Add the Image Hashing library
 add_library(haloc
-    		libhaloc/lc.cpp
-    	 	libhaloc/image.cpp
-    	  	libhaloc/hash.cpp)
+			libhaloc/lc.cpp
+			libhaloc/image.cpp
+			libhaloc/hash.cpp)
 
 # Include directories
-include_directories(${catkin_INCLUDE_DIRS} haloc)
+include_directories(${catkin_INCLUDE_DIRS} libhaloc)
 
 # Add the examples
+add_executable(mono 
+			   examples/mono.cpp)
+target_link_libraries(mono haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})

@@ -71,7 +71,8 @@ public:
   void setNode(Mat img_l, Mat img_r);
 
   // Try to find a loop closure for the last saved node.
-  bool getLoopClosure();
+  bool getLoopClosure(int& lc_img_idx);
+  bool getLoopClosure(int& lc_img_idx, tf::Transform& trans);
 
 private:
 

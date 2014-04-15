@@ -28,20 +28,20 @@ haloc::LoopClosure::Params::Params() :
   validate(DEFAULT_VALIDATE)
 {}
 
-/** \brief LoopClosure class constructor
+/** \brief LoopClosure class constructor.
   */
 haloc::LoopClosure::LoopClosure(){}
 
-/** \brief Sets the class parameters
-  * \param stuct of parameters
+/** \brief Sets the class parameters.
+  * \param stuct of parameters.
   */
 void haloc::LoopClosure::setParams(const Params& params) 
 {
   params_ = params;
 }
 
-/** \brief Sets the camera model
-  * \param Stereo camera model
+/** \brief Sets the camera model.
+  * \param Stereo camera model.
   */
 void haloc::LoopClosure::setCameraModel(image_geometry::StereoCameraModel stereo_camera_model, Mat camera_matrix)
 {
@@ -49,15 +49,15 @@ void haloc::LoopClosure::setCameraModel(image_geometry::StereoCameraModel stereo
   camera_matrix_ = camera_matrix;
 }
 
-/** \brief Initializes the loop closure class
+/** \brief Initializes the loop closure class.
   */
 void haloc::LoopClosure::init()
 {
   // Working directory sanity check
   if (params_.work_dir[params_.work_dir.length()-1] != '/')
-    params_.work_dir += "/ex";
+    params_.work_dir += "/ex_" + boost::lexical_cast<string>(time(0));
   else
-    params_.work_dir += "ex";
+    params_.work_dir += "ex_" + boost::lexical_cast<string>(time(0));
 
   // Create the directory to store the keypoints and descriptors
   if (fs::is_directory(params_.work_dir))
@@ -83,8 +83,8 @@ void haloc::LoopClosure::init()
   img_idx_ = 0;
 }
 
-/** \brief Compute kp, desc and hash for one image (mono verion)
-  * \param cvMat containing the image
+/** \brief Compute kp, desc and hash for one image (mono verion).
+  * \param cvMat containing the image.
   */
 void haloc::LoopClosure::setNode(Mat img)
 {
@@ -96,14 +96,14 @@ void haloc::LoopClosure::setNode(Mat img)
   FileStorage fs(params_.work_dir+"/"+boost::lexical_cast<string>(img_idx_)+".yml", FileStorage::WRITE);
   write(fs, "kp", img_.getKp());
   write(fs, "desc", img_.getDesc());
-  write(fs, "3d", empty);
+  write(fs, "threed", empty);
   fs.release();
   img_idx_++;
 }
 
-/** \brief Compute kp, desc and hash for two images (stereo verion)
-  * \param cvMat containing the left image
-  * \param cvMat containing the right image
+/** \brief Compute kp, desc and hash for two images (stereo verion).
+  * \param cvMat containing the left image.
+  * \param cvMat containing the right image.
   */
 void haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
 {
@@ -114,13 +114,26 @@ void haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
   FileStorage fs(params_.work_dir+"/"+boost::lexical_cast<string>(img_idx_)+".yml", FileStorage::WRITE);
   write(fs, "kp", img_.getKp());
   write(fs, "desc", img_.getDesc());
-  write(fs, "3d", img_.get3D());
+  write(fs, "threed", img_.get3D());
   fs.release();
   img_idx_++;
 }
 
-
-bool haloc::LoopClosure::getLoopClosure()
+/** \brief Try to find a loop closure between last node and all other nodes.
+  * @return true if valid loop closure, false otherwise.
+  * \param Return the index of the image that closes loop (-1 if no loop).
+  */
+bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx)
+{
+  tf::Transform trans;
+  return getLoopClosure(lc_img_idx, trans);
+}
+/** \brief Try to find a loop closure between last node and all other nodes.
+  * @return true if valid loop closure, false otherwise.
+  * \param Return the index of the image that closes loop (-1 if no loop).
+  * \param Return the transform between nodes if loop closure is valid.
+  */
+bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, tf::Transform& trans)
 {
   // Initialize hash
   if (!hash_.isInitialized())
@@ -151,10 +164,11 @@ bool haloc::LoopClosure::getLoopClosure()
   sort(matchings.begin(), matchings.end(), haloc::Utils::sortByMatching);
 
   // Check for loop closure
-  int best_m=0;
+  trans.setIdentity();
+  lc_img_idx = -1;
+  int best_m = 0;
   int matches = 0;
   int inliers = 0;
-  tf::Transform trans;
   bool valid = false;
   while (best_m<params_.n_candidates)
   {
@@ -210,16 +224,21 @@ bool haloc::LoopClosure::getLoopClosure()
     best_m++;
   }
 
+  // Get the image of the loop closure
+  if (valid && best_m < matchings.size())
+    lc_img_idx = matchings[best_m].first;
+
   // Return true if any valid loop closure has been found.
   return valid;
 }
 
-/** \brief Compute the loop closure
-  * @return true if valid loop closure, false otherwise
-  * \param Reference image object
-  * \param Current image filename with all the properties
-  * \param Return the number of matches found
-  * \param Return the number of inliers found
+/** \brief Compute the loop closure (if any).
+  * @return true if valid loop closure, false otherwise.
+  * \param Reference image object.
+  * \param Current image filename with all the properties.
+  * \param Return the number of matches found.
+  * \param Return the number of inliers found.
+  * \param Return the transform between nodes if loop closure is valid.
   */
 bool haloc::LoopClosure::compute(Image ref_image,
                                  string cur_filename,
@@ -244,7 +263,7 @@ bool haloc::LoopClosure::compute(Image ref_image,
   vector<Point3f> points_3d;
   fs["kp"] >> cur_kp;
   fs["desc"] >> cur_desc;
-  fs["3d"] >> points_3d;
+  fs["threed"] >> points_3d;
   fs.release();
 
   // Descriptors crosscheck matching
