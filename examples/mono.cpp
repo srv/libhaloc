@@ -134,9 +134,6 @@ class Mono
             }
           }
 
-          // Log
-          ROS_INFO_STREAM( img_i << " cl with " << img_lc << ": " << valid << " (" << tp << "|" << fa << ")");
-
           img_i++;
         }
 
@@ -162,6 +159,28 @@ class Mono
       ROS_INFO_STREAM("PRECISION: " << precision << "%");
       ROS_INFO_STREAM("RECALL: " << recall << "%");
       ROS_INFO_STREAM("TOTAL EXECUTION TIME: " << overall_time.toSec() << " sec.");
+
+      // Append results to file
+      string output_file = output_path_ + "results.txt";
+      fstream f_out(output_file.c_str(), fstream::in | fstream::out | fstream::app);
+      f_out <<  desc_type_  << "," << 
+                desc_thresh_  << "," << 
+                num_proj_  << "," << 
+                min_neighbour_  << "," << 
+                n_candidates_  << "," << 
+                min_matches_  << "," << 
+                min_inliers_  << "," << 
+                epipolar_thresh_  << "," << 
+                validate_  << "," << 
+                gt_tolerance_  << "," << 
+                total_lc  << "," << 
+                found_lc  << "," << 
+                true_positives  << "," << 
+                false_positives  << "," << 
+                precision  << "," <<
+                recall  << "," <<
+                overall_time.toSec()  << endl;
+      f_out.close();
     }
 
   protected:
