@@ -141,7 +141,8 @@ class Mono
         it++;
       }
 
-      // Show the results
+      // Finalize the loop closure class
+      lc_.finalize();
 
       // Stop time
       ros::WallDuration overall_time = ros::WallTime::now() - overall_time_start;

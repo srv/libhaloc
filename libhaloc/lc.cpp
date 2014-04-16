@@ -83,6 +83,15 @@ void haloc::LoopClosure::init()
   img_idx_ = 0;
 }
 
+/** \brief Finalizes the loop closure class.
+  */
+void haloc::LoopClosure::finalize()
+{
+  // Remove the temporal directory
+  if (fs::is_directory(params_.work_dir))
+    fs::remove_all(params_.work_dir);
+}
+
 /** \brief Compute kp, desc and hash for one image (mono verion).
   * \param cvMat containing the image.
   */

@@ -61,6 +61,9 @@ public:
   // Initialize class.
   void init();
 
+  // Finalize class.
+  void finalize();
+
   // Save the camera model.
   void setCameraModel(image_geometry::StereoCameraModel stereo_camera_model, Mat camera_matrix);
 
