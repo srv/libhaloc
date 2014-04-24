@@ -105,7 +105,7 @@ class Mono
           lc_.setNode(img);
 
           // Get the loop closure (if any)
-          int img_lc;
+          int img_lc = -1;
           bool valid = lc_.getLoopClosure(img_lc);
 
           // Check ground truth
@@ -135,6 +135,9 @@ class Mono
           }
 
           img_i++;
+
+          // Debug
+          //ROS_INFO_STREAM( filename << " cl with " << img_lc << ": " << valid << ": " << tp << "|" << fa);
         }
 
         // Next directory entry
