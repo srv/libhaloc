@@ -68,19 +68,19 @@ public:
   void setCameraModel(image_geometry::StereoCameraModel stereo_camera_model, Mat camera_matrix);
 
   // Compute kp, desc and hash for one image (mono verion).
-  void setNode(Mat img);
+  void setNode(Mat img, string name);
 
   // Compute kp, desc and hash for two images (stereo verion).
-  void setNode(Mat img_l, Mat img_r);
+  void setNode(Mat img_l, Mat img_r, string name);
 
   // Try to find a loop closure for the last saved node.
-  bool getLoopClosure(int& lc_img_idx);
-  bool getLoopClosure(int& lc_img_idx, tf::Transform& trans);
+  bool getLoopClosure(int& lc_img_idx, string& lc_name);
+  bool getLoopClosure(int& lc_img_idx, string& lc_name, tf::Transform& trans);
 
 private:
 
   // Compute the loop closure
-  bool compute(Image ref_image, string cur_filename, int &matches, int &inliers, tf::Transform& trans);
+  bool compute(Image ref_image, string cur_filename, string &lc_name, int &matches, int &inliers, tf::Transform& trans);
 
   // Properties
   Params params_;                       //!> Stores parameters

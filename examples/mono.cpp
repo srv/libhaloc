@@ -35,6 +35,16 @@ class Mono
      */
     void processData()
     {
+      // Initialize output files
+      string log_file_str = output_path_ + "log" + tmp_id_ + ".txt";
+      string out_file_str = output_path_ + "out" + tmp_id_ + ".txt";
+
+      // Delete files if exist
+      fs::wpath log_file(log_file_str);
+      if(fs::exists(log_file)) fs::remove(log_file);
+      fs::wpath out_file(out_file_str);
+      if(fs::exists(out_file)) fs::remove(out_file);
+
       // Sort directory of images
       typedef vector<fs::path> vec;
       vec v;
@@ -51,20 +61,26 @@ class Mono
       int total_lc = 0;
       vector< vector<int> > ground_truth;
       ifstream in(gt_file_.c_str());
-      if (!in) ROS_ERROR("[HashMatching: ] Ground truth file does not exist.");
-      for (int x=0; x<(int)v.size(); x++) 
+      if (!in)
       {
-        vector<int> row;
-        for (int y=0; y<(int)v.size(); y++)
+        ROS_WARN("[HashMatching: ] Ground truth file does not exist.");
+      }
+      else
+      {
+        for (int x=0; x<(int)v.size(); x++) 
         {
-          int num;
-          in >> num;
-          row.push_back(num);
+          vector<int> row;
+          for (int y=0; y<(int)v.size(); y++)
+          {
+            int num;
+            in >> num;
+            row.push_back(num);
+          }
+          ground_truth.push_back(row);
+          int sum_of_elems = accumulate(row.begin(),row.end(),0);
+          if (sum_of_elems > 0)
+            total_lc++;
         }
-        ground_truth.push_back(row);
-        int sum_of_elems = accumulate(row.begin(),row.end(),0);
-        if (sum_of_elems > 0)
-          total_lc++;
       }
       in.close();
 
@@ -98,15 +114,16 @@ class Mono
         if (!fs::is_directory(*it)) 
         {
           // Get image
-          string filename = it->filename().string();
-          Mat img = imread(img_dir_+"/"+filename, CV_LOAD_IMAGE_COLOR);
+          string cur_filename = it->filename().string();
+          Mat img = imread(img_dir_+"/"+cur_filename, CV_LOAD_IMAGE_COLOR);
 
           // Set the new image
-          lc_.setNode(img);
+          lc_.setNode(img, cur_filename);
 
           // Get the loop closure (if any)
           int img_lc = -1;
-          bool valid = lc_.getLoopClosure(img_lc);
+          string lc_filename = "";
+          bool valid = lc_.getLoopClosure(img_lc, lc_filename);
 
           // Check ground truth
           int tp = 0;
@@ -115,11 +132,14 @@ class Mono
           {
             found_lc++;
             int gt_valid = 0;
-            for (int i=0; i<2*gt_tolerance_+1; i++)
+            if (ground_truth.size() > 0)
             {
-              int img_j = img_lc - gt_tolerance_ + i;
-              if (img_j<0) img_j = 0;
-              gt_valid += ground_truth[img_i][img_j];
+              for (int i=0; i<2*gt_tolerance_+1; i++)
+              {
+                int img_j = img_lc - gt_tolerance_ + i;
+                if (img_j<0) img_j = 0;
+                gt_valid += ground_truth[img_i][img_j];
+              }
             }
             
             if(gt_valid >= 1)
@@ -136,8 +156,16 @@ class Mono
 
           img_i++;
 
-          // Debug
-          //ROS_INFO_STREAM( filename << " cl with " << img_lc << ": " << valid << ": " << tp << "|" << fa);
+          // Log
+          ROS_INFO_STREAM( cur_filename << " cl with " << lc_filename << ": " << valid << ": " << tp << "|" << fa);
+          fstream f_log(log_file_str.c_str(), ios::out | ios::app);
+          f_log << cur_filename << "," << 
+                   lc_filename << "," << 
+                   img_lc << "," << 
+                   valid << "," << 
+                   tp << "," << 
+                   fa << endl;
+          f_log.close();
         }
 
         // Next directory entry
@@ -165,25 +193,24 @@ class Mono
       ROS_INFO_STREAM("TOTAL EXECUTION TIME: " << overall_time.toSec() << " sec.");
 
       // Append results to file
-      string output_file = output_path_ + "results.txt";
-      fstream f_out(output_file.c_str(), fstream::in | fstream::out | fstream::app);
-      f_out <<  desc_type_  << "," << 
-                desc_thresh_  << "," << 
-                num_proj_  << "," << 
-                min_neighbour_  << "," << 
-                n_candidates_  << "," << 
-                min_matches_  << "," << 
-                min_inliers_  << "," << 
-                epipolar_thresh_  << "," << 
-                validate_  << "," << 
-                gt_tolerance_  << "," << 
-                total_lc  << "," << 
-                found_lc  << "," << 
-                true_positives  << "," << 
-                false_positives  << "," << 
-                precision  << "," <<
-                recall  << "," <<
-                overall_time.toSec()  << endl;
+      fstream f_out(out_file_str.c_str(), fstream::in | fstream::out | fstream::app);
+      f_out <<  desc_type_ << "," << 
+                desc_thresh_ << "," << 
+                num_proj_ << "," << 
+                min_neighbour_ << "," << 
+                n_candidates_ << "," << 
+                min_matches_ << "," << 
+                min_inliers_ << "," << 
+                epipolar_thresh_ << "," << 
+                validate_ << "," << 
+                gt_tolerance_ << "," << 
+                total_lc << "," << 
+                found_lc << "," << 
+                true_positives << "," << 
+                false_positives << "," << 
+                precision << "," <<
+                recall << "," <<
+                overall_time.toSec() << endl;
       f_out.close();
     }
 
@@ -196,7 +223,7 @@ class Mono
   private:
 
     // Properties
-    string img_dir_, desc_type_, output_path_, gt_file_;
+    string tmp_id_, img_dir_, desc_type_, output_path_, gt_file_;
     double desc_thresh_, epipolar_thresh_;
     bool validate_;
     int num_proj_, min_neighbour_, n_candidates_, min_matches_, min_inliers_, gt_tolerance_;
@@ -206,6 +233,7 @@ class Mono
      */
     void readParams()
     {
+      nh_private_.param("tmp_id", tmp_id_, std::string(""));
       nh_private_.param("output_path", output_path_, std::string(""));
       nh_private_.param("img_dir", img_dir_, std::string(""));
       nh_private_.param("gt_file", gt_file_, std::string(""));
@@ -221,6 +249,7 @@ class Mono
       nh_private_.getParam("gt_tolerance", gt_tolerance_);
 
       // Log
+      cout << "  tmp_id           = " << tmp_id_ << endl;
       cout << "  output_path      = " << output_path_ << endl;
       cout << "  img_dir          = " << img_dir_ << endl;
       cout << "  desc_type        = " << desc_type_ << endl;

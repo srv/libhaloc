@@ -5,7 +5,14 @@ find_package(catkin REQUIRED COMPONENTS
     roslib
     tf
     cv_bridge
-    image_geometry)
+    image_geometry
+	std_msgs)
+
+## Declare ROS messages and services
+add_service_files(FILES RemoteExecution.srv)
+
+## Generate added messages and services
+generate_messages(DEPENDENCIES std_msgs)
 
 # Dependencies - Boost:
 find_package(Boost REQUIRED COMPONENTS signals filesystem system)
@@ -35,3 +42,6 @@ include_directories(${catkin_INCLUDE_DIRS} libhaloc)
 add_executable(mono 
 			   examples/mono.cpp)
 target_link_libraries(mono haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+add_executable(remote_exec_srv 
+			   tools/remote_exec_srv.cpp)
+target_link_libraries(remote_exec_srv ${catkin_LIBRARIES})

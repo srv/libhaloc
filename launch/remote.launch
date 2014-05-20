@@ -1,0 +1,39 @@
+<launch>
+
+	<!-- Input parameters -->
+	<arg name="tmp_id" />
+	<arg name="img_dir" />
+	<arg name="gt_file" default="/home/user/gt.txt"/>
+	<arg name="desc_type" />
+	<arg name="desc_thresh" />
+	<arg name="num_proj" />
+	<arg name="min_neighbour" />
+	<arg name="n_candidates" />
+	<arg name="min_matches" />
+	<arg name="min_inliers" />
+	<arg name="validate" />
+	<arg name="gt_tolerance" />
+
+	<node pkg="libhaloc" type="mono" name="remote_$(arg tmp_id)" output="screen">
+
+		<param name="tmp_id" value="$(arg tmp_id)" />
+
+		<param name="output_path" value="/home/plnegre/Workspace/www/libhaloc/exec_tmp" />
+		<param name="img_dir" value="$(arg img_dir)" />
+		<param name="gt_file" value="$(arg gt_file)" />
+
+		<param name="desc_type" value="$(arg desc_type)" />
+		<param name="desc_thresh" value="$(arg desc_thresh)" />
+
+		<param name="num_proj" value="$(arg num_proj)" />
+
+		<param name="min_neighbour" value="$(arg min_neighbour)" />
+		<param name="n_candidates" value="$(arg n_candidates)" />
+		<param name="min_matches" value="$(arg min_matches)" />
+		<param name="min_inliers" value="$(arg min_inliers)" />
+		<param name="validate" value="$(arg validate)" />
+		<param name="gt_tolerance" value="$(arg gt_tolerance)" />
+
+	</node>
+
+</launch>

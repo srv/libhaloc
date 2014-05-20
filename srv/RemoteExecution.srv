@@ -1,0 +1,14 @@
+string tmp_id
+string img_dir
+string gt_file
+string desc_type
+string desc_thresh
+string num_proj
+string min_neighbour
+string n_candidates
+string min_matches
+string min_inliers
+string validate
+string gt_tolerance
+---
+string msg
