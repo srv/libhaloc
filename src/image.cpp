@@ -1,5 +1,5 @@
-#include "image.h"
-#include "utils.h"
+#include "libhaloc/image.h"
+#include "libhaloc/utils.h"
 
 /** \brief Parameter constructor. Sets the parameter struct to default values.
   */

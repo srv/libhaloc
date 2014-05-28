@@ -1,4 +1,4 @@
-#include "hash.h"
+#include "libhaloc/hash.h"
 #include <opencv2/core/eigen.hpp>
 
 

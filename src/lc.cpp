@@ -1,5 +1,5 @@
-#include "lc.h"
-#include "utils.h"
+#include "libhaloc/lc.h"
+#include "libhaloc/utils.h"
 #include <iostream>
 #include <numeric>
 #include <stdlib.h>
