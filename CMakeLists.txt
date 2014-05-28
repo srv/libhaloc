@@ -27,7 +27,9 @@ find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 link_directories(${OpenCV_LIBRARY_DIRS})
 
-catkin_package()
+catkin_package(INCLUDE_DIRS libhaloc
+			   CATKIN_DEPENDS roscpp
+			   DEPENDS boost eigen opencv)
 
 # Add the Image Hashing library
 add_library(haloc
