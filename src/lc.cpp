@@ -141,6 +141,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name)
   tf::Transform trans;
   return getLoopClosure(lc_img_idx, lc_name, trans);
 }
+
 /** \brief Try to find a loop closure between last node and all other nodes.
   * @return true if valid loop closure, false otherwise.
   * \param Return the index of the image that closes loop (-1 if no loop).
@@ -282,18 +283,18 @@ bool haloc::LoopClosure::compute(Image ref_image,
     ROS_ERROR("[Haloc:] ERROR -> Failed to open the image keypoints and descriptors.");
   vector<Point2f> cur_kp;
   Mat cur_desc;
-  vector<Point3f> points_3d;
+  vector<Point3f> cur_3d;
   fs["name"] >> lc_name;
   fs["kp"] >> cur_kp;
   fs["desc"] >> cur_desc;
-  fs["threed"] >> points_3d;
+  fs["threed"] >> cur_3d;
   fs.release();
 
   // Descriptors crosscheck matching
   vector<DMatch> desc_matches;
   Mat match_mask;
-  haloc::Utils::crossCheckThresholdMatching(ref_image.getDesc(), 
-                                            cur_desc, 
+  haloc::Utils::crossCheckThresholdMatching(cur_desc, 
+                                            ref_image.getDesc(),
                                             params_.desc_thresh, 
                                             match_mask, desc_matches);
   matches = (int)desc_matches.size();
@@ -304,20 +305,27 @@ bool haloc::LoopClosure::compute(Image ref_image,
 
   // Get the matched keypoints
   vector<Point2f> ref_kp = ref_image.getKp();
-  vector<Point2f> ref_points;
-  vector<Point2f> cur_points;
+  vector<Point2f> ref_matched_kp;
+  vector<Point2f> cur_matched_kp;
+  vector<Point3f> cur_matched_3d_points;
   for(int i=0; i<matches; i++)
   {
-    ref_points.push_back(ref_kp[desc_matches[i].queryIdx]);
-    cur_points.push_back(cur_kp[desc_matches[i].trainIdx]);
+    ref_matched_kp.push_back(ref_kp[desc_matches[i].trainIdx]);
+    cur_matched_kp.push_back(cur_kp[desc_matches[i].queryIdx]);
+
+    // Only stereo
+    if (cur_3d.size() == 0)
+    {
+      cur_matched_3d_points.push_back(cur_3d[desc_matches[i].queryIdx]);
+    }
   }
 
   // Proceed depending on mono or stereo
-  if (points_3d.size() == 0) // Mono
+  if (cur_3d.size() == 0) // Mono
   {
     // Check the epipolar geometry
     Mat status;
-    Mat F = findFundamentalMat(ref_points, cur_points, FM_RANSAC, params_.epipolar_thresh, 0.999, status);
+    Mat F = findFundamentalMat(cur_matched_kp, ref_matched_kp, FM_RANSAC, params_.epipolar_thresh, 0.999, status);
 
     // Is the fundamental matrix valid?
     Scalar f_sum_parts = cv::sum(F);
@@ -334,7 +342,7 @@ bool haloc::LoopClosure::compute(Image ref_image,
   {
     Mat rvec, tvec;
     vector<int> solvepnp_inliers;
-    solvePnPRansac(points_3d, cur_points, camera_matrix_, 
+    solvePnPRansac(cur_matched_3d_points, ref_matched_kp, camera_matrix_, 
                    cv::Mat(), rvec, tvec, false, 
                    100, params_.max_reproj_err, 
                    40, solvepnp_inliers);
