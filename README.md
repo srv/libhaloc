@@ -62,3 +62,11 @@ Parameters
 * `min_inliers` - Minimum number of inliers to consider a matching as possible loop closure (>8).
 * `max_reproj_err` - Maximum reprojection error (stereo only).
 * `validate` - True if you want to validate the loop closure (spends more time). Default False.
+
+Demo
+-------
+
+See it in action [here][link_demo].
+
+
+[link_demo]: http://pul.uib.es/libhaloc/
