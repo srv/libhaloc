@@ -25,6 +25,7 @@ void haloc::Image::setParams(const Params& params)
 vector<Point2f> haloc::Image::getKp() { return kp_; }
 Mat haloc::Image::getDesc() { return desc_; }
 vector<Point3f> haloc::Image::get3D() { return points_3d_; };
+string haloc::Image::getName() { return name_; };
 
 
 /** \brief Sets the stereo camera model for the class
@@ -38,8 +39,11 @@ void haloc::Image::setCameraModel(image_geometry::StereoCameraModel stereo_camer
 /** \brief Compute the keypoints and descriptors for one image (mono)
   * \param cvMat image
   */
-void haloc::Image::setMono(const Mat& img)
+void haloc::Image::setMono(const Mat& img, string name)
 {
+  // Identify
+  name_ = name;
+
   // Extract keypoints
   kp_.clear();
   desc_.release();
@@ -58,8 +62,11 @@ void haloc::Image::setMono(const Mat& img)
   * \param cvMat image for left frame
   * \param cvMat image for right frame
   */
-void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r)
+void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
 {
+  // Identify
+  name_ = name;
+  
   // Extract keypoints (left)
   kp_.clear();
   desc_.release();

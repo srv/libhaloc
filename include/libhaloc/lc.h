@@ -39,6 +39,7 @@ public:
     int min_inliers;                    //!> Minimum number of inliers to consider a matching as possible loop closure (>8).
     double max_reproj_err;              //!> Maximum reprojection error (stereo only).
     bool validate;                      //!> True if you want to validate the loop closure (spends more time). Default False.
+    bool verbose;                       //!> Set to true to show logs in the screen.
 
     // Default values
     static const int                    DEFAULT_NUM_PROJ = 2;
@@ -48,8 +49,9 @@ public:
     static const int                    DEFAULT_N_CANDIDATES = 2;
     static const int                    DEFAULT_MIN_MATCHES = 20;
     static const int                    DEFAULT_MIN_INLIERS = 12;
-    static const double                 DEFAULT_MAX_REPROJ_ERR = 3.0;
+    static const double                 DEFAULT_MAX_REPROJ_ERR = 2.0;
     static const bool                   DEFAULT_VALIDATE = false;
+    static const bool                   DEFAULT_VERBOSE = false;
   };
 
   // Set the parameter struct.

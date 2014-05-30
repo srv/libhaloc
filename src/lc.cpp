@@ -25,7 +25,8 @@ haloc::LoopClosure::Params::Params() :
   min_matches(DEFAULT_MIN_MATCHES),
   min_inliers(DEFAULT_MIN_INLIERS),
   max_reproj_err(DEFAULT_MAX_REPROJ_ERR),
-  validate(DEFAULT_VALIDATE)
+  validate(DEFAULT_VALIDATE),
+  verbose(DEFAULT_VERBOSE)
 {}
 
 /** \brief LoopClosure class constructor.
@@ -99,7 +100,7 @@ void haloc::LoopClosure::finalize()
 void haloc::LoopClosure::setNode(Mat img, string name)
 {
   // Set the image
-  img_.setMono(img);
+  img_.setMono(img, name);
 
   // Save kp and descriptors
   vector<Point3f> empty;
@@ -120,7 +121,7 @@ void haloc::LoopClosure::setNode(Mat img, string name)
 void haloc::LoopClosure::setNode(Mat img_l, Mat img_r, string name)
 {
   // Set the image
-  img_.setStereo(img_l, img_r);
+  img_.setStereo(img_l, img_r, name);
 
   // Save kp and descriptors
   FileStorage fs(params_.work_dir+"/"+boost::lexical_cast<string>(img_idx_)+".yml", FileStorage::WRITE);
@@ -246,7 +247,16 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
 
   // Get the image of the loop closure
   if (valid && best_m < matchings.size())
+  {
     lc_img_idx = matchings[best_m].first;
+
+    // Log
+    if(params_.verbose)
+      ROS_INFO_STREAM("[libhaloc:] Loop closed between " << 
+                      img_.getName() << " and " << lc_name << 
+                      " (matches: " << matches << "; inliers: " << 
+                      inliers << ").");
+  }
   else
     lc_name = "";
 
@@ -314,10 +324,8 @@ bool haloc::LoopClosure::compute(Image ref_image,
     cur_matched_kp.push_back(cur_kp[desc_matches[i].queryIdx]);
 
     // Only stereo
-    if (cur_3d.size() == 0)
-    {
+    if (cur_3d.size() != 0)
       cur_matched_3d_points.push_back(cur_3d[desc_matches[i].queryIdx]);
-    }
   }
 
   // Proceed depending on mono or stereo
