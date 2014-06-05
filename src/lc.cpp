@@ -185,7 +185,9 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
   lc_name = "";
   int best_m = 0;
   int matches = 0;
+  int max_matches = 0;
   int inliers = 0;
+  int max_inliers = 0;
   bool valid = false;
   while (best_m<params_.n_candidates)
   {
@@ -203,6 +205,13 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
                     matches, 
                     inliers,
                     trans);
+
+    // Log
+    if (params_.verbose)
+    {
+      if (matches > max_matches) max_matches = matches;
+      if (inliers > max_inliers) max_inliers = inliers;
+    }
 
     // If the loop closure is valid and the seconds step validation is disabled, that's all.
     if (valid && !params_.validate) break;
@@ -258,7 +267,13 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
                       inliers << ").");
   }
   else
+  {
+    // Log
+    if(params_.verbose)
+      ROS_INFO_STREAM("[libhaloc:] Max. matches/inliers found: " << 
+                      max_matches << ", " << max_inliers << ".");
     lc_name = "";
+  }
 
   // Return true if any valid loop closure has been found.
   return valid;
