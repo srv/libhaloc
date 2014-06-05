@@ -9,6 +9,10 @@ The library works for both mono and stereo datasets and provides a transformatio
 
 How it works
 -------
+
+Please see the examples directory for functional implementations. You can also check [this][stereo_slam] integration for a 3D Stereo Slam.
+
+
 1) Declare your haloc object like this:
 ```bash
 haloc::LoopClosure haloc_obj;
@@ -70,3 +74,4 @@ See it in action [here][link_demo].
 
 
 [link_demo]: http://pul.uib.es/libhaloc/
+[stereo_slam]: https://github.com/srv/stereo_slam
