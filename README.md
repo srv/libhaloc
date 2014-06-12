@@ -52,20 +52,16 @@ bool valid = haloc_obj.getLoopClosure(loop_closure_with, trans);
 In both cases, if valid is true, then a loop closure has been found, false otherwise.
 
 
-Parameters
+Most Important Parameters
 -------
 
 * `work_dir` - Directory where the library will save the image informations (must be writtible!).
 * `desc_type` - Type of the descriptors (can be SIFT, SURF).
-* `num_proj` -  Number of projections for image hashing (1-5).
 * `desc_thresh` - Descriptor threshold (tipically between 0.7-0.9).
-* `epipolar_thresh` - Epipolar threshold.
 * `min_neighbour` - Minimum number of neighbours that will be skiped for the loop closure (tipically between 5-20, but depends on the frame rate).
 * `n_candidates` - Get the n first candidates of the hash matching (tipically between 1-5).
 * `min_matches` - Minimun number of descriptor matches to consider a matching as possible loop closure (>8).
 * `min_inliers` - Minimum number of inliers to consider a matching as possible loop closure (>8).
-* `max_reproj_err` - Maximum reprojection error (stereo only).
-* `validate` - True if you want to validate the loop closure (spends more time). Default False.
 
 Demo
 -------
