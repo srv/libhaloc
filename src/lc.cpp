@@ -56,9 +56,9 @@ void haloc::LoopClosure::init()
 {
   // Working directory sanity check
   if (params_.work_dir[params_.work_dir.length()-1] != '/')
-    params_.work_dir += "/ex_" + boost::lexical_cast<string>(time(0));
+    params_.work_dir += "/haloc_" + boost::lexical_cast<string>(time(0));
   else
-    params_.work_dir += "ex_" + boost::lexical_cast<string>(time(0));
+    params_.work_dir += "haloc_" + boost::lexical_cast<string>(time(0));
 
   // Create the directory to store the keypoints and descriptors
   if (fs::is_directory(params_.work_dir))
