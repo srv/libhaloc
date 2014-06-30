@@ -4,6 +4,7 @@
 #include <ros/ros.h>
 #include <tf/transform_broadcaster.h>
 #include <opencv2/features2d/features2d.hpp>
+#include <opencv2/nonfree/features2d.hpp>
 #include <opencv2/nonfree/nonfree.hpp>
 #include <image_geometry/stereo_camera_model.h>
 
