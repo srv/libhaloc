@@ -16,8 +16,7 @@ using namespace std;
 namespace fs=boost::filesystem;
 
 /**
- * Stores incoming point clouds in a map transforming
- * each cloud to a global fixed frame using tf.
+ * Executes libhaloc over a set of images
  */
 class Mono
 {
