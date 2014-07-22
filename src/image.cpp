@@ -16,16 +16,20 @@ haloc::Image::Image() {}
 /** \brief Sets the parameters
   * \param parameter struct.
   */
-void haloc::Image::setParams(const Params& params) 
+void haloc::Image::setParams(const Params& params)
 {
   params_ = params;
 }
 
 // Access specifiers
 vector<Point2f> haloc::Image::getKp() { return kp_; }
+void haloc::Image::setKp(vector<Point2f> kp) { kp_ = kp; }
 Mat haloc::Image::getDesc() { return desc_; }
+void haloc::Image::setDesc(Mat desc) { desc_ = desc; }
 vector<Point3f> haloc::Image::get3D() { return points_3d_; };
+void haloc::Image::set3D(vector<Point3f> points_3d) { points_3d_ = points_3d; };
 string haloc::Image::getName() { return name_; };
+void haloc::Image::setName(string name) { name_ = name; };
 
 
 /** \brief Sets the stereo camera model for the class
@@ -66,7 +70,7 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
 {
   // Identify
   name_ = name;
-  
+
   // Extract keypoints (left)
   kp_.clear();
   desc_.release();
@@ -87,13 +91,13 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
   // Find matches between left and right images
   Mat match_mask;
   vector<DMatch> matches, matches_filtered;
-  haloc::Utils::crossCheckThresholdMatching(desc_, 
+  haloc::Utils::crossCheckThresholdMatching(desc_,
       desc_r, params_.desc_thresh, match_mask, matches);
 
-  // Filter matches by epipolar 
+  // Filter matches by epipolar
   for (size_t i = 0; i < matches.size(); ++i)
   {
-    if (abs(kp_l[matches[i].queryIdx].pt.y - kp_r[matches[i].trainIdx].pt.y) 
+    if (abs(kp_l[matches[i].queryIdx].pt.y - kp_r[matches[i].trainIdx].pt.y)
         < params_.epipolar_thresh)
       matches_filtered.push_back(matches[i]);
   }

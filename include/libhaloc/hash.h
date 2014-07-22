@@ -60,7 +60,7 @@ private:
   vector<float> compute_random_vector(uint seed, int size);
 
   // Make a vector unit
-  vector<float> unit_vector(vector<float> x);  
+  vector<float> unit_vector(vector<float> x);
 
   // Properties
   Params params_;                           //!> Stores parameters

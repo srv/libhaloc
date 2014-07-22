@@ -36,7 +36,7 @@ haloc::LoopClosure::LoopClosure(){}
 /** \brief Sets the class parameters.
   * \param stuct of parameters.
   */
-void haloc::LoopClosure::setParams(const Params& params) 
+void haloc::LoopClosure::setParams(const Params& params)
 {
   params_ = params;
 }
@@ -199,10 +199,10 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
     }
 
     // Loop-closure?
-    valid = compute(img_, 
-                    params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first)+".yml", 
-                    lc_name, 
-                    matches, 
+    valid = compute(img_,
+                    params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first)+".yml",
+                    lc_name,
+                    matches,
                     inliers,
                     trans);
 
@@ -226,20 +226,20 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
       string tmp_name;
 
       // Loop closure for the previous image?
-      validate_valid = compute(img_, 
-                               params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first - 1)+".yml", 
-                               tmp_name, 
-                               matches_val, 
+      validate_valid = compute(img_,
+                               params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first - 1)+".yml",
+                               tmp_name,
+                               matches_val,
                                inliers_val,
                                trans_val);
 
       if (!validate_valid)
       {
         // Previous validation does not works, try to validate with the next image
-        validate_valid = compute(img_, 
-                                 params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first + 1)+".yml", 
-                                 tmp_name, 
-                                 matches_val, 
+        validate_valid = compute(img_,
+                                 params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first + 1)+".yml",
+                                 tmp_name,
+                                 matches_val,
                                  inliers_val,
                                  trans_val);
       }
@@ -261,21 +261,70 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
 
     // Log
     if(params_.verbose)
-      ROS_INFO_STREAM("[libhaloc:] Loop closed between " << 
-                      img_.getName() << " and " << lc_name << 
-                      " (matches: " << matches << "; inliers: " << 
+      ROS_INFO_STREAM("[libhaloc:] Loop closed between " <<
+                      img_.getName() << " and " << lc_name <<
+                      " (matches: " << matches << "; inliers: " <<
                       inliers << ").");
   }
   else
   {
     // Log
     if(params_.verbose)
-      ROS_INFO_STREAM("[libhaloc:] Max. matches/inliers found: " << 
+      ROS_INFO_STREAM("[libhaloc:] Max. matches/inliers found: " <<
                       max_matches << ", " << max_inliers << ".");
     lc_name = "";
   }
 
   // Return true if any valid loop closure has been found.
+  return valid;
+}
+
+/** \brief Compute the loop closure (if any) between ref -> cur.
+  * @return true if valid loop closure, false otherwise.
+  * \param reference image id.
+  * \param current image id.
+  * \param Return the number of matches found.
+  * \param Return the number of inliers found.
+  * \param Return the transform between nodes if loop closure is valid.
+  */
+bool haloc::LoopClosure::getLoopClosureById(string image_id_ref,
+                                            string image_id_cur,
+                                            tf::Transform& trans)
+{
+  // Read the data for image_id_1
+  FileStorage fs;
+  fs.open(params_.work_dir+"/"+image_id_ref+".yml", FileStorage::READ);
+  if (!fs.isOpened())
+    ROS_ERROR("[Haloc:] ERROR -> Failed to open the image keypoints and descriptors.");
+  string name;
+  vector<Point2f> kp;
+  Mat desc;
+  vector<Point3f> points_3d;
+  fs["name"] >> name;
+  fs["kp"] >> kp;
+  fs["desc"] >> desc;
+  fs["threed"] >> points_3d;
+  fs.release();
+  Image img_ref;
+  img_ref.setName(name);
+  img_ref.setKp(kp);
+  img_ref.setDesc(desc);
+  img_ref.set3D(points_3d);
+
+  // Get the loop closing (if any)
+  int matches, inliers;
+  bool valid = compute(img_ref,
+                       params_.work_dir+"/"+image_id_cur+".yml",
+                       name,
+                       matches,
+                       inliers,
+                       trans);
+
+  if(params_.verbose && valid)
+    ROS_INFO_STREAM("[libhaloc:] Loop closed by ID between " <<
+                    image_id_ref << " and " << image_id_cur <<
+                    " (matches: " << matches << "; inliers: " <<
+                    inliers << ").");
   return valid;
 }
 
@@ -289,7 +338,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
   */
 bool haloc::LoopClosure::compute(Image ref_image,
                                  string cur_filename,
-                                 string &lc_name, 
+                                 string &lc_name,
                                  int &matches,
                                  int &inliers,
                                  tf::Transform& trans)
@@ -302,9 +351,9 @@ bool haloc::LoopClosure::compute(Image ref_image,
   if ( !fs::exists(cur_filename) ) return false;
 
   // Get the image keypoints and descriptors
-  FileStorage fs; 
+  FileStorage fs;
   fs.open(cur_filename, FileStorage::READ);
-  if (!fs.isOpened()) 
+  if (!fs.isOpened())
     ROS_ERROR("[Haloc:] ERROR -> Failed to open the image keypoints and descriptors.");
   vector<Point2f> cur_kp;
   Mat cur_desc;
@@ -318,9 +367,9 @@ bool haloc::LoopClosure::compute(Image ref_image,
   // Descriptors crosscheck matching
   vector<DMatch> desc_matches;
   Mat match_mask;
-  haloc::Utils::crossCheckThresholdMatching(cur_desc, 
+  haloc::Utils::crossCheckThresholdMatching(cur_desc,
                                             ref_image.getDesc(),
-                                            params_.desc_thresh, 
+                                            params_.desc_thresh,
                                             match_mask, desc_matches);
   matches = (int)desc_matches.size();
 
@@ -365,9 +414,9 @@ bool haloc::LoopClosure::compute(Image ref_image,
   {
     Mat rvec, tvec;
     vector<int> solvepnp_inliers;
-    solvePnPRansac(cur_matched_3d_points, ref_matched_kp, camera_matrix_, 
-                   cv::Mat(), rvec, tvec, false, 
-                   100, params_.max_reproj_err, 
+    solvePnPRansac(cur_matched_3d_points, ref_matched_kp, camera_matrix_,
+                   cv::Mat(), rvec, tvec, false,
+                   100, params_.max_reproj_err,
                    40, solvepnp_inliers);
 
     inliers = (int)solvepnp_inliers.size();

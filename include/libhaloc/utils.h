@@ -20,13 +20,13 @@ class Utils
 public:
 
   /** \brief extract the keypoints of some image
-    * @return 
+    * @return
     * \param image the source image
     * \param key_points is the pointer for the resulting image key_points
     * \param type descriptor type (see opencv docs)
     */
-  static void keypointDetector( const Mat& image, 
-                                vector<KeyPoint>& key_points, 
+  static void keypointDetector( const Mat& image,
+                                vector<KeyPoint>& key_points,
                                 string type)
   {
     // Check Opponent color space descriptors
@@ -51,7 +51,7 @@ public:
   }
 
   /** \brief extract descriptors of some image
-    * @return 
+    * @return
     * \param image the source image
     * \param key_points keypoints of the source image
     * \param descriptors is the pointer for the resulting image descriptors
@@ -72,7 +72,7 @@ public:
   }
 
   /** \brief match descriptors of 2 images by threshold
-    * @return 
+    * @return
     * \param descriptors1 descriptors of image1
     * \param descriptors2 descriptors of image2
     * \param threshold to determine correct matchings
@@ -118,13 +118,13 @@ public:
   }
 
   /** \brief filter matches of cross check matching
-    * @return 
+    * @return
     * \param matches1to2 matches from image 1 to 2
     * \param matches2to1 matches from image 2 to 1
     * \param matches output vector with filtered matches
     */
   static void crossCheckFilter(
-      const vector<DMatch>& matches1to2, 
+      const vector<DMatch>& matches1to2,
       const vector<DMatch>& matches2to1,
       vector<DMatch>& checked_matches)
   {
@@ -147,7 +147,7 @@ public:
   }
 
   /** \brief match descriptors of 2 images by threshold
-    * @return 
+    * @return
     * \param descriptors1 descriptors of image 1
     * \param descriptors2 descriptors of image 2
     * \param threshold to determine correct matchings
@@ -177,8 +177,8 @@ public:
     * \param world_point pointer to the corresponding 3d point
     */
   static void calculate3DPoint(const image_geometry::StereoCameraModel stereo_camera_model,
-                               const Point2d& left_point, 
-                               const Point2d& right_point, 
+                               const Point2d& left_point,
+                               const Point2d& right_point,
                                Point3d& world_point)
   {
     double disparity = left_point.x - right_point.x;
@@ -206,13 +206,13 @@ public:
     if (rvec.empty() || tvec.empty())
       return tf::Transform();
 
-    tf::Vector3 axis(rvec.at<double>(0, 0), 
-               rvec.at<double>(1, 0), 
+    tf::Vector3 axis(rvec.at<double>(0, 0),
+               rvec.at<double>(1, 0),
                  rvec.at<double>(2, 0));
     double angle = cv::norm(rvec);
     tf::Quaternion quaternion(axis, angle);
 
-    tf::Vector3 translation(tvec.at<double>(0, 0), tvec.at<double>(1, 0), 
+    tf::Vector3 translation(tvec.at<double>(0, 0), tvec.at<double>(1, 0),
         tvec.at<double>(2, 0));
 
     return tf::Transform(quaternion, translation);

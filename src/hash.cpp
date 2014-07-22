@@ -18,7 +18,7 @@ haloc::Hash::Hash()
 }
 
 /** \brief Return true if the class has been initialized
-  * @return 
+  * @return
   */
 bool haloc::Hash::isInitialized()
 {
@@ -26,10 +26,10 @@ bool haloc::Hash::isInitialized()
 }
 
 /** \brief Sets the class parameters
-  * @return 
+  * @return
   * \param stuct of parameters
   */
-void haloc::Hash::setParams(const Params& params) 
+void haloc::Hash::setParams(const Params& params)
 {
   params_ = params;
 }
@@ -37,7 +37,7 @@ void haloc::Hash::setParams(const Params& params)
 // Class initialization
 void haloc::Hash::init(Mat desc, bool proj_orthogonal)
 {
-  // Create the random projections vectors 
+  // Create the random projections vectors
   initProjections(desc.rows, proj_orthogonal);
 
   // Set the size of the descriptors
@@ -89,7 +89,7 @@ void haloc::Hash::initProjections(int desc_size, bool orthogonal)
   int seed = time(NULL);
   r_.clear();
 
-  // The size of the descriptors may vary... We multiply the current descriptor size 
+  // The size of the descriptors may vary... We multiply the current descriptor size
   // for a escalar to handle the larger cases.
   int v_size = 6*desc_size;
 
@@ -151,8 +151,8 @@ void haloc::Hash::initProjections(int desc_size, bool orthogonal)
       r_.push_back(unit_vector(r));
     }
   }
-  
-  
+
+
 }
 
 /** \brief Computes a random vector of some size
@@ -199,6 +199,6 @@ float haloc::Hash::match(vector<float> hash_1, vector<float> hash_2)
   float sum = 0.0;
   for (uint i=0; i<hash_1.size(); i++)
     sum += fabs(hash_1[i] - hash_2[i]);
-  
+
   return sum;
 }

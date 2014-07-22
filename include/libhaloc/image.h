@@ -50,23 +50,27 @@ public:
   // Save the camera model
   void setCameraModel(image_geometry::StereoCameraModel stereo_camera_model);
 
-  // Return the keypoints of the image (left for stereo)
+  // Get/set the keypoints of the image (left for stereo)
   vector<Point2f> getKp();
+  void setKp(vector<Point2f>);
 
-  // Return the descriptors of the image (left for stereo)
+  // Get/set the descriptors of the image (left for stereo)
   Mat getDesc();
+  void setDesc(Mat);
 
-  // Return the 3D points
+  // Get/set the 3D points
   vector<Point3f> get3D();
+  void set3D(vector<Point3f>);
 
-  // Return the name
+  // Get/set the name
   string getName();
+  void setName(string);
 
 private:
 
   Params params_;                       //!> Stores parameters
 
-  image_geometry::StereoCameraModel 
+  image_geometry::StereoCameraModel
     stereo_camera_model_;               //!> Object to save the stereo camera model.
 
   vector<Point2f> kp_;                  //!> Unfiltered keypoints of the images.

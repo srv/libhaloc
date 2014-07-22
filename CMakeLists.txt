@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(libhaloc)
-find_package(catkin REQUIRED COMPONENTS 
+find_package(catkin REQUIRED COMPONENTS
     roscpp
     roslib
     tf
@@ -40,9 +40,9 @@ target_link_libraries(haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRA
 include_directories(${catkin_INCLUDE_DIRS} include)
 
 # Add the examples
-add_executable(mono 
+add_executable(mono
 			   examples/mono.cpp)
 target_link_libraries(mono haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
-add_executable(remote_exec_srv 
+add_executable(remote_exec_srv
 			   tools/remote_exec_srv.cpp)
 target_link_libraries(remote_exec_srv ${catkin_LIBRARIES})
