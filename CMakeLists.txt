@@ -6,7 +6,8 @@ find_package(catkin REQUIRED COMPONENTS
     tf
     cv_bridge
     image_geometry
-	std_msgs)
+    std_msgs
+    cmake_modules)
 
 ## Declare ROS messages and services
 add_service_files(FILES RemoteExecution.srv)
@@ -31,9 +32,9 @@ catkin_package(INCLUDE_DIRS include LIBRARIES haloc)
 
 # Add the Image Hashing library
 add_library(haloc
-			src/lc.cpp
-			src/image.cpp
-			src/hash.cpp)
+           src/lc.cpp
+	   src/image.cpp
+	   src/hash.cpp)
 target_link_libraries(haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
 
 # Include directories
