@@ -5,7 +5,8 @@
 	<arg name="img_dir" />
 	<arg name="gt_file" default="/home/user/gt.txt"/>
 	<arg name="desc_type" />
-	<arg name="desc_thresh" />
+	<arg name="desc_matching_type" />
+	<arg name="desc_thresh_ratio" />
 	<arg name="num_proj" />
 	<arg name="min_neighbour" />
 	<arg name="n_candidates" />
@@ -23,7 +24,8 @@
 		<param name="gt_file" value="$(arg gt_file)" />
 
 		<param name="desc_type" value="$(arg desc_type)" />
-		<param name="desc_thresh" value="$(arg desc_thresh)" />
+		<param name="desc_matching_type" value="$(arg desc_matching_type)" />
+		<param name="desc_thresh_ratio" value="$(arg desc_thresh_ratio)" />
 
 		<param name="num_proj" value="$(arg num_proj)" />
 

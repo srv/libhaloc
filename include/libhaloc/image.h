@@ -27,14 +27,13 @@ public:
 
     // Class parameters
     string desc_type;                   //!> Type of the descriptors (can be SIFT, SURF).
-    double desc_thresh;                 //!> Descriptor threshold for crosscheck matching (typically between 0.7-0.9).
-    double desc_ratio;                  //!> Descriptor ratio for ratio matching (typically between 0.6-0.8).
+    string desc_matching_type;          //!> Can be "CROSSCHECK" or "RATIO"
+    double desc_thresh_ratio;           //!> Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
     int min_matches;                    //!> Minimum number of descriptor matches (as for lc.h) here is only used to determine the descriptor matching procedure.
     int epipolar_thresh;                //!> Epipolar threshold (stereo only).
 
     // Default values
-    static const double                 DEFAULT_DESC_THRESH = 0.8;
-    static const double                 DEFAULT_DESC_RATIO = 0.6;
+    static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_MIN_MATCHES = 20;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
   };

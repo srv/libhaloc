@@ -15,10 +15,11 @@ namespace fs=boost::filesystem;
 /** \brief Parameter constructor. Sets the parameter struct to default values.
   */
 haloc::LoopClosure::Params::Params() :
+  num_proj(DEFAULT_NUM_PROJ),
   work_dir(""),
   desc_type("SIFT"),
-  num_proj(DEFAULT_NUM_PROJ),
-  desc_thresh(DEFAULT_DESC_THRESH),
+  desc_matching_type("CROSSCHECK"),
+  desc_thresh_ratio(DEFAULT_DESC_THRESH_RATIO),
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH),
   min_neighbour(DEFAULT_MIN_NEIGHBOUR),
   n_candidates(DEFAULT_N_CANDIDATES),
@@ -39,6 +40,22 @@ haloc::LoopClosure::LoopClosure(){}
 void haloc::LoopClosure::setParams(const Params& params)
 {
   params_ = params;
+
+  // Log
+  cout << "  num_proj           = " << params_.num_proj << endl;
+  cout << "  work_dir           = " << params_.work_dir << endl;
+  cout << "  desc_type          = " << params_.desc_type << endl;
+  cout << "  desc_matching_type = " << params_.desc_matching_type << endl;
+  cout << "  desc_thresh_ratio  = " << params_.desc_thresh_ratio << endl;
+  cout << "  epipolar_thresh    = " << params_.epipolar_thresh << endl;
+  cout << "  min_neighbour      = " << params_.min_neighbour << endl;
+  cout << "  n_candidates       = " << params_.n_candidates << endl;
+  cout << "  min_matches        = " << params_.min_matches << endl;
+  cout << "  min_inliers        = " << params_.min_inliers << endl;
+  cout << "  max_reproj_err     = " << params_.max_reproj_err << endl;
+  cout << "  validate           = " << params_.validate << endl;
+  cout << "  verbose            = " << params_.verbose << endl;
+
 }
 
 /** \brief Sets the camera model.
@@ -70,7 +87,8 @@ void haloc::LoopClosure::init()
   // Initialize image properties
   haloc::Image::Params img_params;
   img_params.desc_type = params_.desc_type;
-  img_params.desc_thresh = params_.desc_thresh;
+  img_params.desc_matching_type = params_.desc_matching_type;
+  img_params.desc_thresh_ratio = params_.desc_thresh_ratio;
   img_params.min_matches = params_.min_matches;
   img_params.epipolar_thresh = params_.epipolar_thresh;
   img_.setParams(img_params);
@@ -190,6 +208,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
   int inliers = 0;
   int max_inliers = 0;
   bool valid = false;
+  string best_lc_found = "";
   while (best_m<params_.n_candidates)
   {
     // Sanity check
@@ -210,8 +229,12 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
     // Log
     if (params_.verbose)
     {
-      if (matches > max_matches) max_matches = matches;
-      if (inliers > max_inliers) max_inliers = inliers;
+      if (matches > max_matches)
+      {
+        max_matches = matches;
+        max_inliers = inliers;
+        best_lc_found = lc_name;
+      }
     }
 
     // If the loop closure is valid and the seconds step validation is disabled, that's all.
@@ -262,7 +285,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
 
     // Log
     if(params_.verbose)
-      ROS_INFO_STREAM("[libhaloc:] Loop closed between " <<
+      ROS_INFO_STREAM("[libhaloc:] LC between nodes " <<
                       img_.getName() << " and " << lc_name <<
                       " (matches: " << matches << "; inliers: " <<
                       inliers << ").");
@@ -271,8 +294,18 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
   {
     // Log
     if(params_.verbose)
-      ROS_INFO_STREAM("[libhaloc:] Max. matches/inliers found: " <<
-                      max_matches << ", " << max_inliers << ".");
+    {
+      if (best_lc_found != "")
+      {
+        ROS_INFO_STREAM("[libhaloc:] No LC, but best candidate is node " <<
+                        best_lc_found << " (matches: " << max_matches <<
+                        "; inliers: " << max_inliers << ").");
+      }
+      else
+      {
+        ROS_INFO("[libhaloc:] No LC.");
+      }
+    }
     lc_name = "";
   }
 
@@ -365,13 +398,24 @@ bool haloc::LoopClosure::compute(Image ref_image,
   fs["threed"] >> cur_3d;
   fs.release();
 
-  // Descriptors crosscheck matching
-  vector<DMatch> desc_matches;
+  // Descriptors matching
   Mat match_mask;
-  haloc::Utils::crossCheckThresholdMatching(cur_desc,
-                                            ref_image.getDesc(),
-                                            params_.desc_thresh,
-                                            match_mask, desc_matches);
+  vector<DMatch> desc_matches;
+  if(params_.desc_matching_type == "CROSSCHECK")
+  {
+    haloc::Utils::crossCheckThresholdMatching(cur_desc,
+        ref_image.getDesc(), params_.desc_thresh_ratio, match_mask, desc_matches);
+  }
+  else if (params_.desc_matching_type == "RATIO")
+  {
+    haloc::Utils::ratioMatching(cur_desc,
+        ref_image.getDesc(), params_.desc_thresh_ratio, desc_matches);
+  }
+  else
+  {
+    ROS_ERROR("[Haloc:] ERROR -> desc_matching_type must be 'CROSSCHECK' or 'RATIO'");
+  }
+
   matches = (int)desc_matches.size();
 
   // Check matches size

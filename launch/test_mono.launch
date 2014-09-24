@@ -7,7 +7,7 @@
 		<param name="gt_file" value="" /> <!-- Ground truth file: matrix of nxn (for n-images) where each position is set to 0 or 1. 1 means loop closure. -->
 
 		<param name="desc_type" value="SIFT" />
-		<param name="desc_thresh" value="0.87" />
+		<param name="desc_thresh_ratio" value="0.87" />
 
 		<param name="num_proj" value="3" />
 

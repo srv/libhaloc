@@ -5,8 +5,8 @@
   */
 haloc::Image::Params::Params() :
   desc_type("SIFT"),
-  desc_thresh(DEFAULT_DESC_THRESH),
-  desc_ratio(DEFAULT_DESC_RATIO),
+  desc_matching_type("CROSSCHECK"),
+  desc_thresh_ratio(DEFAULT_DESC_THRESH_RATIO),
   min_matches(DEFAULT_MIN_MATCHES),
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH)
 {}
@@ -21,13 +21,6 @@ haloc::Image::Image() {}
 void haloc::Image::setParams(const Params& params)
 {
   params_ = params;
-  if (params_.desc_type == "SIFT")
-    params_.desc_ratio = 0.6;
-  else if(params_.desc_type == "SURF")
-    params_.desc_ratio = 0.7;
-  else
-    params_.desc_ratio = 1.0;
-
 }
 
 // Access specifiers
@@ -101,17 +94,19 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
   Mat match_mask;
   vector<DMatch> matches, matches_filtered;
 
-  // Crosscheck matching for images with a high number of keypoints and ratio matching
-  // when low number of keypoints are expected for every image.
-  if(params_.min_matches > 50)
+  if(params_.desc_matching_type == "CROSSCHECK")
   {
     haloc::Utils::crossCheckThresholdMatching(desc_,
-        desc_r, params_.desc_thresh, match_mask, matches);
+        desc_r, params_.desc_thresh_ratio, match_mask, matches);
+  }
+  else if (params_.desc_matching_type == "RATIO")
+  {
+    haloc::Utils::ratioMatching(desc_,
+        desc_r, params_.desc_thresh_ratio, matches);
   }
   else
   {
-    haloc::Utils::ratioMatching(desc_,
-        desc_r, params_.desc_ratio, matches);
+    ROS_ERROR("[Haloc:] ERROR -> desc_matching_type must be 'CROSSCHECK' or 'RATIO'");
   }
 
   // Filter matches by epipolar

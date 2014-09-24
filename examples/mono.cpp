@@ -87,8 +87,9 @@ class Mono
       haloc::LoopClosure::Params lc_params;
       lc_params.work_dir = output_path_;
       lc_params.desc_type = desc_type_;
+      lc_params.desc_matching_type = desc_matching_type_;
       lc_params.num_proj = num_proj_;
-      lc_params.desc_thresh = desc_thresh_;
+      lc_params.desc_thresh_ratio = desc_thresh_ratio_;
       lc_params.epipolar_thresh = epipolar_thresh_;
       lc_params.min_neighbour = min_neighbour_;
       lc_params.n_candidates = n_candidates_;
@@ -194,7 +195,8 @@ class Mono
       // Append results to file
       fstream f_out(out_file_str.c_str(), fstream::in | fstream::out | fstream::app);
       f_out <<  desc_type_ << "," <<
-                desc_thresh_ << "," <<
+                desc_matching_type_ << "," <<
+                desc_thresh_ratio_ << "," <<
                 num_proj_ << "," <<
                 min_neighbour_ << "," <<
                 n_candidates_ << "," <<
@@ -222,8 +224,8 @@ class Mono
   private:
 
     // Properties
-    string tmp_id_, img_dir_, desc_type_, output_path_, gt_file_;
-    double desc_thresh_, epipolar_thresh_;
+    string tmp_id_, img_dir_, desc_type_, desc_matching_type_, output_path_, gt_file_;
+    double desc_thresh_ratio_, epipolar_thresh_;
     bool validate_;
     int num_proj_, min_neighbour_, n_candidates_, min_matches_, min_inliers_, gt_tolerance_;
     haloc::LoopClosure lc_;
@@ -237,7 +239,8 @@ class Mono
       nh_private_.param("img_dir", img_dir_, std::string(""));
       nh_private_.param("gt_file", gt_file_, std::string(""));
       nh_private_.param("desc_type", desc_type_, std::string("SIFT"));
-      nh_private_.getParam("desc_thresh", desc_thresh_);
+      nh_private_.param("desc_matching_type", desc_matching_type_, std::string("CROSSCHECK"));
+      nh_private_.getParam("desc_thresh_ratio", desc_thresh_ratio_);
       nh_private_.getParam("num_proj", num_proj_);
       nh_private_.getParam("min_neighbour", min_neighbour_);
       nh_private_.getParam("n_candidates", n_candidates_);
@@ -248,19 +251,19 @@ class Mono
       nh_private_.getParam("gt_tolerance", gt_tolerance_);
 
       // Log
-      cout << "  tmp_id           = " << tmp_id_ << endl;
-      cout << "  output_path      = " << output_path_ << endl;
-      cout << "  img_dir          = " << img_dir_ << endl;
-      cout << "  desc_type        = " << desc_type_ << endl;
-      cout << "  desc_thresh      = " << desc_thresh_ << endl;
-      cout << "  num_proj         = " << num_proj_ << endl;
-      cout << "  min_neighbour    = " << min_neighbour_ << endl;
-      cout << "  n_candidates     = " << n_candidates_ << endl;
-      cout << "  min_matches      = " << min_matches_ << endl;
-      cout << "  min_inliers      = " << min_inliers_ << endl;
-      cout << "  epipolar_thresh  = " << epipolar_thresh_ << endl;
-      cout << "  validate         = " << validate_ << endl;
-      cout << "  gt_tolerance     = " << gt_tolerance_ << endl;
+      cout << "  tmp_id            = " << tmp_id_ << endl;
+      cout << "  output_path       = " << output_path_ << endl;
+      cout << "  img_dir           = " << img_dir_ << endl;
+      cout << "  desc_type         = " << desc_type_ << endl;
+      cout << "  desc_thresh_ratio = " << desc_thresh_ratio_ << endl;
+      cout << "  num_proj          = " << num_proj_ << endl;
+      cout << "  min_neighbour     = " << min_neighbour_ << endl;
+      cout << "  n_candidates      = " << n_candidates_ << endl;
+      cout << "  min_matches       = " << min_matches_ << endl;
+      cout << "  min_inliers       = " << min_inliers_ << endl;
+      cout << "  epipolar_thresh   = " << epipolar_thresh_ << endl;
+      cout << "  validate          = " << validate_ << endl;
+      cout << "  gt_tolerance      = " << gt_tolerance_ << endl;
 
       // Files path sanity check
       if (output_path_[output_path_.length()-1] != '/')
