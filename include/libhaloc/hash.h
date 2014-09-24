@@ -18,7 +18,7 @@ class Hash
 
 public:
 
-  // Class contructor
+  // Class constructor
   Hash();
 
   struct Params

@@ -71,6 +71,7 @@ void haloc::LoopClosure::init()
   haloc::Image::Params img_params;
   img_params.desc_type = params_.desc_type;
   img_params.desc_thresh = params_.desc_thresh;
+  img_params.min_matches = params_.min_matches;
   img_params.epipolar_thresh = params_.epipolar_thresh;
   img_.setParams(img_params);
 
@@ -93,7 +94,7 @@ void haloc::LoopClosure::finalize()
     fs::remove_all(params_.work_dir);
 }
 
-/** \brief Compute kp, desc and hash for one image (mono verion).
+/** \brief Compute kp, desc and hash for one image (mono version).
   * \param cvMat containing the image.
   * \param human readable name for this image
   */
@@ -113,7 +114,7 @@ void haloc::LoopClosure::setNode(Mat img, string name)
   img_idx_++;
 }
 
-/** \brief Compute kp, desc and hash for two images (stereo verion).
+/** \brief Compute kp, desc and hash for two images (stereo version).
   * \param cvMat containing the left image.
   * \param cvMat containing the right image.
   * \param human readable name for this image
@@ -162,7 +163,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
   vector<float> hash_val = hash_.getHash(img_.getDesc());
   hash_table_.push_back(make_pair(img_idx_-1, hash_val));
 
-  // Check if enough neighours
+  // Check if enough neighbours
   if (hash_table_.size() <= params_.min_neighbour)
     return false;
 

@@ -19,7 +19,7 @@ class LoopClosure
 
 public:
 
-  // Class contructor
+  // Class constructor
   LoopClosure();
 
   struct Params
@@ -28,14 +28,14 @@ public:
     Params();
 
     // Class parameters
-    string work_dir;                    //!> Directory where the library will save the image informations (must be writtible!).
+    string work_dir;                    //!> Directory where the library will save the image informations (must be writable!).
     string desc_type;                   //!> Type of the descriptors (can be SIFT, SURF).
     int num_proj;                       //!> Number of projections for image hashing
-    double desc_thresh;                 //!> Descriptor threshold (tipically between 0.7-0.9).
+    double desc_thresh;                 //!> Descriptor threshold (typically between 0.7-0.9).
     int epipolar_thresh;                //!> Epipolar threshold.
-    int min_neighbour;                  //!> Minimum number of neighbours that will be skiped for the loop closure (tipically between 5-20, but depends on the frame rate).
-    int n_candidates;                   //!> Get the n first candidates of the hash matching (tipically between 1-5).
-    int min_matches;                    //!> Minimun number of descriptor matches to consider a matching as possible loop closure (>8).
+    int min_neighbour;                  //!> Minimum number of neighbours that will be skipped for the loop closure (typically between 5-20, but depends on the frame rate).
+    int n_candidates;                   //!> Get the n first candidates of the hash matching (typically between 1-5).
+    int min_matches;                    //!> Minimum number of descriptor matches to consider a matching as possible loop closure (>8).
     int min_inliers;                    //!> Minimum number of inliers to consider a matching as possible loop closure (>8).
     double max_reproj_err;              //!> Maximum reprojection error (stereo only).
     bool validate;                      //!> True if you want to validate the loop closure (spends more time). Default False.
@@ -70,11 +70,11 @@ public:
   void setCameraModel(image_geometry::StereoCameraModel stereo_camera_model,
                       Mat camera_matrix);
 
-  // Compute kp, desc and hash for one image (mono verion).
+  // Compute kp, desc and hash for one image (mono version).
   void setNode(Mat img,
                string name);
 
-  // Compute kp, desc and hash for two images (stereo verion).
+  // Compute kp, desc and hash for two images (stereo version).
   void setNode(Mat img_l,
                Mat img_r,
                string name);

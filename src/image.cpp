@@ -6,6 +6,8 @@
 haloc::Image::Params::Params() :
   desc_type("SIFT"),
   desc_thresh(DEFAULT_DESC_THRESH),
+  desc_ratio(DEFAULT_DESC_RATIO),
+  min_matches(DEFAULT_MIN_MATCHES),
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH)
 {}
 
@@ -19,6 +21,13 @@ haloc::Image::Image() {}
 void haloc::Image::setParams(const Params& params)
 {
   params_ = params;
+  if (params_.desc_type == "SIFT")
+    params_.desc_ratio = 0.6;
+  else if(params_.desc_type == "SURF")
+    params_.desc_ratio = 0.7;
+  else
+    params_.desc_ratio = 1.0;
+
 }
 
 // Access specifiers
@@ -91,8 +100,19 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
   // Find matches between left and right images
   Mat match_mask;
   vector<DMatch> matches, matches_filtered;
-  haloc::Utils::crossCheckThresholdMatching(desc_,
-      desc_r, params_.desc_thresh, match_mask, matches);
+
+  // Crosscheck matching for images with a high number of keypoints and ratio matching
+  // when low number of keypoints are expected for every image.
+  if(params_.min_matches > 50)
+  {
+    haloc::Utils::crossCheckThresholdMatching(desc_,
+        desc_r, params_.desc_thresh, match_mask, matches);
+  }
+  else
+  {
+    haloc::Utils::ratioMatching(desc_,
+        desc_r, params_.desc_ratio, matches);
+  }
 
   // Filter matches by epipolar
   for (size_t i = 0; i < matches.size(); ++i)

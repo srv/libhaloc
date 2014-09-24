@@ -90,7 +90,7 @@ void haloc::Hash::initProjections(int desc_size, bool orthogonal)
   r_.clear();
 
   // The size of the descriptors may vary... We multiply the current descriptor size
-  // for a escalar to handle the larger cases.
+  // for a scalar to handle the larger cases.
   int v_size = 6*desc_size;
 
   if (orthogonal)

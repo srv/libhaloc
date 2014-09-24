@@ -33,7 +33,7 @@ bool start_node(libhaloc::RemoteExecution::Request  &req,
 		// Output
 		res.msg = "Error launching the node!";
 	}
-	
+
 	return true;
 }
 

@@ -48,7 +48,7 @@ class Mono
       typedef vector<fs::path> vec;
       vec v;
       copy(
-            fs::directory_iterator(img_dir_), 
+            fs::directory_iterator(img_dir_),
             fs::directory_iterator(),
             back_inserter(v)
           );
@@ -66,7 +66,7 @@ class Mono
       }
       else
       {
-        for (int x=0; x<(int)v.size(); x++) 
+        for (int x=0; x<(int)v.size(); x++)
         {
           vector<int> row;
           for (int y=0; y<(int)v.size(); y++)
@@ -100,7 +100,7 @@ class Mono
 
       // Count the overall loop time
       ros::WallTime overall_time_start = ros::WallTime::now();
-      
+
       // Iterate over all images
       int img_i = 0;
       bool first = true;
@@ -110,7 +110,7 @@ class Mono
       while (it!=v.end())
       {
         // Check if the directory entry is an directory.
-        if (!fs::is_directory(*it)) 
+        if (!fs::is_directory(*it))
         {
           // Get image
           string cur_filename = it->filename().string();
@@ -140,7 +140,7 @@ class Mono
                 gt_valid += ground_truth[img_i][img_j];
               }
             }
-            
+
             if(gt_valid >= 1)
             {
               true_positives++;
@@ -158,11 +158,11 @@ class Mono
           // Log
           ROS_INFO_STREAM( cur_filename << " cl with " << lc_filename << ": " << valid << ": " << tp << "|" << fa);
           fstream f_log(log_file_str.c_str(), ios::out | ios::app);
-          f_log << cur_filename << "," << 
-                   lc_filename << "," << 
-                   img_lc << "," << 
-                   valid << "," << 
-                   tp << "," << 
+          f_log << cur_filename << "," <<
+                   lc_filename << "," <<
+                   img_lc << "," <<
+                   valid << "," <<
+                   tp << "," <<
                    fa << endl;
           f_log.close();
         }
@@ -193,20 +193,20 @@ class Mono
 
       // Append results to file
       fstream f_out(out_file_str.c_str(), fstream::in | fstream::out | fstream::app);
-      f_out <<  desc_type_ << "," << 
-                desc_thresh_ << "," << 
-                num_proj_ << "," << 
-                min_neighbour_ << "," << 
-                n_candidates_ << "," << 
-                min_matches_ << "," << 
-                min_inliers_ << "," << 
-                epipolar_thresh_ << "," << 
-                validate_ << "," << 
-                gt_tolerance_ << "," << 
-                total_lc << "," << 
-                found_lc << "," << 
-                true_positives << "," << 
-                false_positives << "," << 
+      f_out <<  desc_type_ << "," <<
+                desc_thresh_ << "," <<
+                num_proj_ << "," <<
+                min_neighbour_ << "," <<
+                n_candidates_ << "," <<
+                min_matches_ << "," <<
+                min_inliers_ << "," <<
+                epipolar_thresh_ << "," <<
+                validate_ << "," <<
+                gt_tolerance_ << "," <<
+                total_lc << "," <<
+                found_lc << "," <<
+                true_positives << "," <<
+                false_positives << "," <<
                 precision << "," <<
                 recall << "," <<
                 overall_time.toSec() << endl;
@@ -218,7 +218,7 @@ class Mono
     // Node handlers
     ros::NodeHandle nh_;
     ros::NodeHandle nh_private_;
-    
+
   private:
 
     // Properties
@@ -267,9 +267,9 @@ class Mono
         output_path_ += "/";
 
       // Sanity checks
-      if (!fs::exists(img_dir_) || !fs::is_directory(img_dir_)) 
+      if (!fs::exists(img_dir_) || !fs::is_directory(img_dir_))
       {
-        ROS_ERROR_STREAM("[HashMatching:] The image directory does not exists: " << 
+        ROS_ERROR_STREAM("[HashMatching:] The image directory does not exists: " <<
                          img_dir_);
       }
     }
@@ -290,7 +290,7 @@ int main(int argc, char **argv)
 
   // Subscription is handled at start and stop service callbacks.
   //ros::spin();
-  
+
   return 0;
 }
 

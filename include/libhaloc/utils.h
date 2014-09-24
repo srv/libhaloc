@@ -71,6 +71,46 @@ public:
     }
   }
 
+  /** \brief match descriptors of 2 images by ratio
+    * @return
+    * \param descriptors1 descriptors of image1
+    * \param descriptors2 descriptors of image2
+    * \param ratio to determine correct matchings
+    * \param matches output vector with the matches
+    */
+  static void ratioMatching(const Mat& descriptors1, const Mat& descriptors2,
+    double ratio, vector<DMatch>& matches)
+  {
+    matches.clear();
+    if (descriptors1.empty() || descriptors2.empty())
+      return;
+    assert(descriptors1.type() == descriptors2.type());
+    assert(descriptors1.cols == descriptors2.cols);
+
+    const int knn = 2;
+    Ptr<DescriptorMatcher> descriptor_matcher;
+    // choose matcher based on feature type
+    if (descriptors1.type() == CV_8U)
+    {
+      descriptor_matcher = DescriptorMatcher::create("BruteForce-Hamming");
+    }
+    else
+    {
+      descriptor_matcher = DescriptorMatcher::create("BruteForce");
+    }
+    vector<vector<DMatch> > knn_matches;
+    descriptor_matcher->knnMatch(descriptors1, descriptors2,
+            knn_matches, knn);
+
+    for (unsigned m = 0; m < knn_matches.size(); m++)
+    {
+        if (knn_matches[m][0].distance <= knn_matches[m][1].distance * ratio)
+        {
+            matches.push_back(knn_matches[m][0]);
+        }
+    }
+  }
+
   /** \brief match descriptors of 2 images by threshold
     * @return
     * \param descriptors1 descriptors of image1
@@ -197,7 +237,7 @@ public:
 
   /** \brief compose the transformation matrix using 2 cv::Mat as inputs:
     * one for rotation and one for translation
-    * @return the trasnformation matrix
+    * @return the transformation matrix
     * \param rvec cv matrix with the rotation angles
     * \param tvec cv matrix with the transformation x y z
     */
