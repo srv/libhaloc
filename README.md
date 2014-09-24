@@ -57,7 +57,7 @@ Most Important Parameters
 
 * `work_dir` - Directory where the library will save the image informations (must be writtible!).
 * `desc_type` - Type of the descriptors (can be SIFT, SURF).
-* `desc_matching_type` - Can be "CROSSCHECK" or "RATIO".
+* `desc_matching_type` - Can be CROSSCHECK or RATIO.
 * `desc_thresh_ratio` - Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
 * `min_neighbour` - Minimum number of neighbours that will be skiped for the loop closure (tipically between 5-20, but depends on the frame rate).
 * `n_candidates` - Get the n first candidates of the hash matching (tipically between 1-5).

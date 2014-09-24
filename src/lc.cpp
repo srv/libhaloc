@@ -107,6 +107,14 @@ void haloc::LoopClosure::init()
   */
 void haloc::LoopClosure::finalize()
 {
+  // Log information
+  if (params_.verbose && lc_candidate_positions_.size() > 0)
+  {
+    double sum = std::accumulate(lc_candidate_positions_.begin(), lc_candidate_positions_.end(), 0.0);
+    double mean = sum / lc_candidate_positions_.size();
+    ROS_INFO_STREAM("[libhaloc:] Mean loop closure candidate position: " << mean << "/" << params_.n_candidates << ".");
+  }
+
   // Remove the temporal directory
   if (fs::is_directory(params_.work_dir))
     fs::remove_all(params_.work_dir);
@@ -282,29 +290,24 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
   if (valid && best_m < matchings.size())
   {
     lc_img_idx = matchings[best_m].first;
+    lc_candidate_positions_.push_back(best_m);
 
     // Log
     if(params_.verbose)
       ROS_INFO_STREAM("[libhaloc:] LC between nodes " <<
                       img_.getName() << " and " << lc_name <<
                       " (matches: " << matches << "; inliers: " <<
-                      inliers << ").");
+                      inliers << "; Position: " << best_m << "/" <<
+                      params_.n_candidates << ").");
   }
   else
   {
     // Log
-    if(params_.verbose)
+    if(params_.verbose && best_lc_found != "")
     {
-      if (best_lc_found != "")
-      {
-        ROS_INFO_STREAM("[libhaloc:] No LC, but best candidate is node " <<
-                        best_lc_found << " (matches: " << max_matches <<
-                        "; inliers: " << max_inliers << ").");
-      }
-      else
-      {
-        ROS_INFO("[libhaloc:] No LC.");
-      }
+      ROS_INFO_STREAM("[libhaloc:] No LC, but best candidate is node " <<
+                      best_lc_found << " (matches: " << max_matches <<
+                      "; inliers: " << max_inliers << ").");
     }
     lc_name = "";
   }

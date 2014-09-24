@@ -109,6 +109,7 @@ private:
   int img_idx_;                         //!> Incremental index for the stored images
   Mat camera_matrix_;                   //!> Used to save the camera matrix
   vector< pair<int, vector<float> > > hash_table_;  //!> Hash table
+  vector<int> lc_candidate_positions_;  //!> Loop closure candidate positions
 
 };
 
