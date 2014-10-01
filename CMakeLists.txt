@@ -44,7 +44,12 @@ include_directories(${catkin_INCLUDE_DIRS} include)
 add_executable(mono
 			   examples/mono.cpp)
 target_link_libraries(mono haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+
+# Add the tools
 add_executable(remote_exec_srv
 			   tools/remote_exec_srv.cpp)
 add_dependencies(remote_exec_srv libhaloc_gencpp)
 target_link_libraries(remote_exec_srv ${catkin_LIBRARIES})
+add_executable(evaluation
+               tools/evaluation.cpp)
+target_link_libraries(evaluation ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
