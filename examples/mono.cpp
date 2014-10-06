@@ -95,7 +95,6 @@ class Mono
       lc_params.n_candidates = n_candidates_;
       lc_params.min_matches = min_matches_;
       lc_params.min_inliers = min_inliers_;
-      lc_params.validate = validate_;
       lc_.setParams(lc_params);
       lc_.init();
 

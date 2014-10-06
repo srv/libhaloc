@@ -63,10 +63,10 @@ private:
   vector<float> unit_vector(vector<float> x);
 
   // Properties
-  Params params_;                           //!> Stores parameters
-  vector< vector<float> > r_;               //!> Vector of random values
-  int h_size_;                              //!> Size of the hash
-  bool initialized_;                        //!> True when class has been initialized
+  Params params_;                           //!> Stores parameters.
+  vector< vector<float> > r_;               //!> Vector of random values.
+  int h_size_;                              //!> Size of the hash.
+  bool initialized_;                        //!> True when class has been initialized.
 };
 
 } // namespace

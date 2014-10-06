@@ -5,6 +5,7 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/nonfree/features2d.hpp>
 #include <boost/filesystem.hpp>
+#include "libhaloc/lc.h"
 
 namespace fs=boost::filesystem;
 
@@ -19,6 +20,7 @@ class EvaluationNode
     // Public parameters
     string training_dir_;
     string running_dir_;
+    haloc::LoopClosure lc_;
 
     // Class constructor
     EvaluationNode() : nhp_("~") {}
@@ -46,6 +48,19 @@ class EvaluationNode
       nhp_.param<int>("self_match_window", self_match_window_, 1);
       nhp_.param<bool>("disable_unknown_match", disable_unknown_match_, false);
       nhp_.param<bool>("add_only_new_places", add_only_new_places_, false);
+
+      // Libhaloc
+      haloc::LoopClosure::Params lc_params;
+      nhp_.param("work_dir", lc_params.work_dir, string(""));
+      nhp_.param("desc_type", lc_params.desc_type, string("SIFT"));
+      nhp_.param("desc_matching_type", lc_params.desc_matching_type, string("CROSSCHECK"));
+      nhp_.param<int>("num_proj", lc_params.num_proj, 3);
+      nhp_.param<double>("desc_thresh_ratio", lc_params.desc_thresh_ratio, 0.7);
+      nhp_.param<int>("min_neighbour", lc_params.min_neighbour, 1);
+      nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
+      nhp_.param<int>("min_matches", lc_params.min_matches, 15);
+      nhp_.param<int>("min_inliers", lc_params.min_inliers, 12);
+      lc_.setParams(lc_params);
     }
 
     // Initialize the node
@@ -65,6 +80,8 @@ class EvaluationNode
       // - Match to nothing
       confusion_mat_ = Mat::zeros(2,2,CV_64FC1);
 
+      // Libhaloc
+      lc_.init();
     }
 
     // Openfabmap learning stage
@@ -170,11 +187,39 @@ class EvaluationNode
         Mat img = imread(path, CV_LOAD_IMAGE_COLOR);
         image_id++;
 
+
+
+
+        // HALOC ---------------------------------------
+
+        ros::WallTime haloc_start = ros::WallTime::now();
+        lc_.setNode(img, filename);
+        vector< pair<int,float> > hash_matching;
+        lc_.getCandidates(hash_matching);
+        ros::WallDuration haloc_time = ros::WallTime::now() - haloc_start;
+
+        cout << endl;
+        ROS_INFO("++++++++++++++++++++++++++++++++++++++++++++++++++");
+        ROS_INFO_STREAM("HALOC " << image_id << " can close loop with:");
+        cout << "[ ";
+        for (int i=0; i<hash_matching.size();i++){
+          cout << hash_matching[i].first << " ";
+        }
+        cout << "]" << endl << "[ ";
+        for (int i=0; i<hash_matching.size();i++){
+          cout << hash_matching[i].second << " ";
+        }
+        cout << "]" << endl;
+        ROS_INFO_STREAM("HALOC TIME: " << haloc_time.toSec() << " sec.");
+
+
+
+        // OPENFABMAP ----------------------------------
+
+        ros::WallTime bow_start = ros::WallTime::now();
         Mat bow;
-        ROS_DEBUG("[Haloc:] Detector.....");
         vector<KeyPoint> kpts;
         detector_->detect(img, kpts);
-        ROS_DEBUG("[Haloc:] Compute discriptors...");
         bide_->compute(img, kpts, bow);
 
         // Check if the frame could be described
@@ -183,7 +228,6 @@ class EvaluationNode
           // IF NOT the first frame processed
           if (!first_frame)
           {
-            ROS_DEBUG("[Haloc:] Compare bag of words...");
             vector<of2::IMatch> matches;
 
             // Find match likelyhoods for this 'bow'
@@ -235,10 +279,13 @@ class EvaluationNode
               matched_to_img_match.push_back(match_iter->match);
             }
 
+            ros::WallDuration bow_time = ros::WallTime::now() - bow_start;
+
             // IF filtered matches were found
             if (matched_to_img_seq.size() > 0)
             {
-              ROS_INFO_STREAM("IMAGE " << image_id << " can close loop with:");
+              ROS_INFO("--------------------------------------------------");
+              ROS_INFO_STREAM("BOW " << image_id << " can close loop with:");
               cout << "[ ";
               for (int i=0; i<matched_to_img_seq.size();i++){
                 cout << matched_to_img_seq[i] << " ";
@@ -248,6 +295,7 @@ class EvaluationNode
                 cout << matched_to_img_match[i] << " ";
               }
               cout << "]" << endl;
+              ROS_INFO_STREAM("BOW TIME: " << bow_time.toSec() << " sec.");
             }
           }
           else
@@ -432,6 +480,8 @@ int main(int argc, char** argv)
     node.of2Run();
   }
 
+  // Stop libhaloc
+  node.lc_.finalize();
 
   ros::spin();
   return 0;

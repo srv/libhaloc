@@ -52,4 +52,4 @@ add_dependencies(remote_exec_srv libhaloc_gencpp)
 target_link_libraries(remote_exec_srv ${catkin_LIBRARIES})
 add_executable(evaluation
                tools/evaluation.cpp)
-target_link_libraries(evaluation ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(evaluation haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
