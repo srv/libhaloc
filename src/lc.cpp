@@ -15,7 +15,6 @@ namespace fs=boost::filesystem;
 /** \brief Parameter constructor. Sets the parameter struct to default values.
   */
 haloc::LoopClosure::Params::Params() :
-  num_proj(DEFAULT_NUM_PROJ),
   work_dir(""),
   desc_type("SIFT"),
   desc_matching_type("CROSSCHECK"),
@@ -41,7 +40,6 @@ void haloc::LoopClosure::setParams(const Params& params)
   params_ = params;
 
   // Log
-  cout << "  num_proj           = " << params_.num_proj << endl;
   cout << "  work_dir           = " << params_.work_dir << endl;
   cout << "  desc_type          = " << params_.desc_type << endl;
   cout << "  desc_matching_type = " << params_.desc_matching_type << endl;
@@ -91,11 +89,6 @@ void haloc::LoopClosure::init()
   img_params.epipolar_thresh = params_.epipolar_thresh;
   img_.setParams(img_params);
 
-  // Initialize hash
-  haloc::Hash::Params hash_params;
-  hash_params.num_proj = params_.num_proj;
-  hash_.setParams(hash_params);
-
   // Init main variables
   hash_table_.clear();
   img_id_ = 0;
@@ -140,10 +133,10 @@ void haloc::LoopClosure::setNode(Mat img, string name)
 
   // Initialize hash
   if (!hash_.isInitialized())
-    hash_.init(img_.getDesc(), true);
+    hash_.init();
 
   // Store its hash
-  vector<float> hash_value = hash_.getHash(img_.getDesc());
+  Hash::HashBucket hash_value = hash_.getHash(img_.getBucketedDesc());
   hash_table_.push_back(make_pair(img_id_, hash_value));
 
   // Save kp and descriptors
@@ -182,10 +175,10 @@ void haloc::LoopClosure::setNode(Mat img_l, Mat img_r, string name)
 
   // Initialize hash
   if (!hash_.isInitialized())
-    hash_.init(img_.getDesc(), true);
+    hash_.init();
 
   // Store its hash
-  vector<float> hash_value = hash_.getHash(img_.getDesc());
+  Hash::HashBucket hash_value = hash_.getHash(img_.getBucketedDesc());
   hash_table_.push_back(make_pair(img_id_, hash_value));
 
   // Save kp and descriptors
@@ -202,59 +195,46 @@ void haloc::LoopClosure::setNode(Mat img_l, Mat img_r, string name)
 /** \brief Get the best n_candidates to close loop with the last image.
   * @return a hash matching vector containing the best image matchings and its likelihood.
   */
-void haloc::LoopClosure::getCandidates(vector< pair<int,float> >& hash_matching)
+void haloc::LoopClosure::getCandidates(vector< pair<int,float> >& matchings)
 {
-  getCandidates(img_id_-1, hash_matching);
+  getCandidates(img_id_-1, matchings);
 }
 
 /** \brief Get the best n_candidates to close loop with the image specified by id.
   * \param image id.
   */
-void haloc::LoopClosure::getCandidates(int image_id, vector< pair<int,float> >& hash_matching)
+void haloc::LoopClosure::getCandidates(int image_id, vector< pair<int,float> >& matchings)
 {
-  hash_matching.clear();
+  matchings.clear();
 
   // Check if enough neighbours
   if (hash_table_.size() - 1 <= params_.min_neighbour) return;
 
-  // Get the current hash
-  vector<float> hash_value = hash_table_[image_id].second;
+  // Get the query hash
+  Hash::HashBucket hash_q = hash_table_[image_id].second;
 
   // Compute the hash matchings for the last image with all other sequence
-  vector< pair<int,float> > matchings;
+  vector< pair<int,float> > tmp_matchings;
   for (uint i=0; i<hash_table_.size()-params_.min_neighbour; i++)
   {
     // Do not compute the hash matching with itself
     if (i == image_id) continue;
 
-    // Hash matching
-    vector<float> cur_hash = hash_table_[i].second;
-    float m = hash_.match(hash_value, cur_hash);
-    matchings.push_back(make_pair(hash_table_[i].first, m));
+    // Loop over the hash buckets to compute the mask of permissive matchings
+    Hash::HashBucket hash_t = hash_table_[i].second;
+    tmp_matchings.push_back(make_pair(hash_table_[i].first, hash_.matching(hash_q, hash_t)));
   }
 
-  // Sort the hash matchings
-  sort(matchings.begin(), matchings.end(), haloc::Utils::sortByMatching);
+  // Sort ascending
+  sort(tmp_matchings.begin(), tmp_matchings.end(), haloc::Utils::sortByMatching);
 
   // Re-compute the available matches
   int max_candidates = params_.n_candidates;
-  if (matchings.size()<max_candidates) max_candidates = matchings.size();
+  if (tmp_matchings.size()<max_candidates) max_candidates = tmp_matchings.size();
 
-
-  // Get the worst match
-  float worst_case = matchings[max_candidates-1].second;
-
-  // Compute the likelihood
-  vector<float> diff_to_max;
-  for (uint i=0; i<max_candidates-1; i++)
-    diff_to_max.push_back(worst_case - matchings[i].second);
-  float sum_of_elems =accumulate(diff_to_max.begin(),diff_to_max.end(),0);
-  for (uint i=0; i<max_candidates-1; i++)
-  {
-    float ratio = matchings[i].second / sum_of_elems;
-    hash_matching.push_back(make_pair(matchings[i].first, ratio));
-  }
-  hash_matching.push_back(make_pair(matchings[max_candidates-1].first, 0.0));
+  // Save only the required
+  for (uint i=0; i<max_candidates; i++)
+    matchings.push_back(tmp_matchings[i]);
 }
 
 /** \brief Try to find a loop closure between last node and all other nodes.
@@ -444,7 +424,7 @@ bool haloc::LoopClosure::compute(Image ref_image,
   else if (params_.desc_matching_type == "RATIO")
   {
     haloc::Utils::ratioMatching(cur_desc,
-        ref_image.getDesc(), params_.desc_thresh_ratio, desc_matches);
+        ref_image.getDesc(), params_.desc_thresh_ratio, match_mask, desc_matches);
   }
   else
   {

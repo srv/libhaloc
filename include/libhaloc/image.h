@@ -61,6 +61,9 @@ public:
   Mat getDesc();
   void setDesc(Mat);
 
+  // Get/set the bucketed descriptors of the image (left for stereo)
+  vector<Mat> getBucketedDesc();
+
   // Get/set the 3D points
   vector<Point3f> get3D();
   void set3D(vector<Point3f>);
@@ -72,14 +75,16 @@ public:
 private:
 
   Params params_;                       //!> Stores parameters
-
   image_geometry::StereoCameraModel
     stereo_camera_model_;               //!> Object to save the stereo camera model.
-
   vector<Point2f> kp_;                  //!> Unfiltered keypoints of the images.
   Mat desc_;                            //!> Unfiltered descriptors of the images.
+  vector<Mat> b_desc_;                  //!> Bucketed descriptors
   vector<Point3f> points_3d_;           //!> 3D points of the stereo correspondences.
   string name_;                         //!> Name identifying the current image
+
+  // Bucket the descriptors
+  vector<Mat> bucketDescriptors(vector<KeyPoint> kp, Mat desc, int i_width, int i_height);
 };
 
 } // namespace

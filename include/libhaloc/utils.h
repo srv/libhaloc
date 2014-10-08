@@ -79,7 +79,7 @@ public:
     * \param matches output vector with the matches
     */
   static void ratioMatching(const Mat& descriptors1, const Mat& descriptors2,
-    double ratio, vector<DMatch>& matches)
+    double ratio, const Mat& match_mask, vector<DMatch>& matches)
   {
     matches.clear();
     if (descriptors1.empty() || descriptors2.empty())
@@ -100,14 +100,13 @@ public:
     }
     vector<vector<DMatch> > knn_matches;
     descriptor_matcher->knnMatch(descriptors1, descriptors2,
-            knn_matches, knn);
+            knn_matches, knn, match_mask);
 
     for (unsigned m = 0; m < knn_matches.size(); m++)
     {
-        if (knn_matches[m][0].distance <= knn_matches[m][1].distance * ratio)
-        {
-            matches.push_back(knn_matches[m][0]);
-        }
+      if (knn_matches[m].size() < 2) continue;
+      if (knn_matches[m][0].distance <= knn_matches[m][1].distance * ratio)
+        matches.push_back(knn_matches[m][0]);
     }
   }
 
@@ -141,16 +140,14 @@ public:
     }
     vector<vector<DMatch> > knn_matches;
     descriptor_matcher->knnMatch(descriptors1, descriptors2,
-            knn_matches, knn);
+            knn_matches, knn, match_mask);
 
-    for (size_t m = 0; m < knn_matches.size(); m++ )
+    for (size_t m = 0; m < knn_matches.size(); m++)
     {
       if (knn_matches[m].size() < 2) continue;
-      bool match_allowed = match_mask.empty() ? true : match_mask.at<unsigned char>(
-          knn_matches[m][0].queryIdx, knn_matches[m][0].trainIdx) > 0;
       float dist1 = knn_matches[m][0].distance;
       float dist2 = knn_matches[m][1].distance;
-      if (dist1 / dist2 < threshold && match_allowed)
+      if (dist1 / dist2 < threshold)
       {
         matches.push_back(knn_matches[m][0]);
       }
@@ -232,16 +229,16 @@ public:
     */
   static bool sortByMatching(const pair<int, float> d1, const pair<int, float> d2)
   {
-    return (d1.second < d2.second);
+    return (d1.second > d2.second);
   }
 
-  /** \brief compose the transformation matrix using 2 cv::Mat as inputs:
+  /** \brief compose the transformation matrix using 2 Mat as inputs:
     * one for rotation and one for translation
     * @return the transformation matrix
     * \param rvec cv matrix with the rotation angles
     * \param tvec cv matrix with the transformation x y z
     */
-  static tf::Transform buildTransformation(cv::Mat rvec, cv::Mat tvec)
+  static tf::Transform buildTransformation(Mat rvec, Mat tvec)
   {
     if (rvec.empty() || tvec.empty())
       return tf::Transform();
@@ -249,7 +246,7 @@ public:
     tf::Vector3 axis(rvec.at<double>(0, 0),
                rvec.at<double>(1, 0),
                  rvec.at<double>(2, 0));
-    double angle = cv::norm(rvec);
+    double angle = norm(rvec);
     tf::Quaternion quaternion(axis, angle);
 
     tf::Vector3 translation(tvec.at<double>(0, 0), tvec.at<double>(1, 0),

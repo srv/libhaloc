@@ -1,6 +1,7 @@
 #ifndef HASH_H
 #define HASH_H
 
+#include <ros/ros.h>
 #include "opencv2/core/core.hpp"
 #include "opencv2/features2d/features2d.hpp"
 #include <Eigen/Eigen>
@@ -18,43 +19,33 @@ class Hash
 
 public:
 
-  // Class constructor
-  Hash();
-
-  struct Params
+  // Represents a hash for a single bucket
+  struct HashBucket
   {
-    //Default constructor sets all values to defaults.
-    Params();
-
     // Class parameters
-    int num_proj;                   //!> Number of projections required
-
-    // Default values
-    static const int              DEFAULT_PROJ_NUM = 2;
+    vector<int> num_features;           //!> Number of features per bucket.
+    Mat hash_value;                     //!> Hash values per bucket.
   };
 
-  // Set the parameter struct
-  void setParams(const Params& params);
+  // Class constructor
+  Hash();
 
   // Returns true if the class has been initialized
   bool isInitialized();
 
-  // Return current parameters
-  inline Params params() const { return params_; }
-
   // Initialize class
-  void init(Mat desc, bool proj_orthogonal);
+  void init();
 
   // Compute the hash
-  vector<float> getHash(Mat desc);
+  HashBucket getHash(vector<Mat> desc);
 
   // Compute the distance between 2 hashes
-  float match(vector<float> hash_1, vector<float> hash_2);
+  float matching(HashBucket hash_q, HashBucket hash_t);
 
 private:
 
   // Init the random vectors for projections
-  void initProjections(int desc_size, bool orthogonal);
+  void initProjections();
 
   // Compute a random vector
   vector<float> compute_random_vector(uint seed, int size);
@@ -63,10 +54,12 @@ private:
   vector<float> unit_vector(vector<float> x);
 
   // Properties
-  Params params_;                           //!> Stores parameters.
   vector< vector<float> > r_;               //!> Vector of random values.
-  int h_size_;                              //!> Size of the hash.
   bool initialized_;                        //!> True when class has been initialized.
+  int desc_length_;                         //!> The length of the descriptors used.
+
+
+  const int bucket_max_size_;               //!> The size of the descriptors may vary... We take a value large enough.
 };
 
 } // namespace

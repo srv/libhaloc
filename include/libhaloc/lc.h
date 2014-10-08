@@ -28,7 +28,6 @@ public:
     Params();
 
     // Class parameters
-    int num_proj;                       //!> Number of projections for image hashing.
     string work_dir;                    //!> Directory where the library will save the image informations (must be writable!).
     string desc_type;                   //!> Type of the descriptors (can be SIFT, SURF).
     string desc_matching_type;          //!> Can be "CROSSCHECK" or "RATIO"
@@ -42,7 +41,6 @@ public:
     bool verbose;                       //!> Set to true to show logs in the screen.
 
     // Default values
-    static const int                    DEFAULT_NUM_PROJ = 2;
     static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
     static const int                    DEFAULT_MIN_NEIGHBOUR = 10;
@@ -82,10 +80,10 @@ public:
                string name);
 
   // Retrieve the candidates to close loop with the last saved node.
-  void getCandidates(vector< pair<int,float> >& hash_matching);
+  void getCandidates(vector< pair<int,float> >& matchings);
   // Retrieve the candidates to close loop with the specified node.
   void getCandidates(int image_id,
-                     vector< pair<int,float> >& hash_matching);
+                     vector< pair<int,float> >& matchings);
 
   // Try to find a loop closure for the last saved node.
   bool getLoopClosure(int& lc_img_id,
@@ -117,8 +115,7 @@ private:
   Hash hash_;                           //!> Hash object.
   int img_id_;                          //!> Incremental index for the stored images.
   Mat camera_matrix_;                   //!> Used to save the camera matrix.
-  vector< pair<int,
-    vector<float> > > hash_table_;      //!> Hash table.
+  vector< pair<int, Hash::HashBucket > > hash_table_;      //!> Hash table.
   vector<int> lc_candidate_positions_;  //!> Loop closure candidate positions.
 
 };

@@ -2,18 +2,11 @@
 #include <opencv2/core/eigen.hpp>
 
 
-/** \brief Parameter constructor. Sets the parameter struct to default values.
-  */
-haloc::Hash::Params::Params() :
-  num_proj(DEFAULT_PROJ_NUM)
-{}
-
 /** \brief Hash class constructor
   */
-haloc::Hash::Hash()
+haloc::Hash::Hash() : bucket_max_size_(200), desc_length_(-1)
 {
   // Initializations
-  h_size_ = -1;
   initialized_ = false;
 }
 
@@ -25,23 +18,11 @@ bool haloc::Hash::isInitialized()
   return initialized_;
 }
 
-/** \brief Sets the class parameters
-  * @return
-  * \param stuct of parameters
-  */
-void haloc::Hash::setParams(const Params& params)
-{
-  params_ = params;
-}
-
 // Class initialization
-void haloc::Hash::init(Mat desc, bool proj_orthogonal)
+void haloc::Hash::init()
 {
   // Create the random projections vectors
-  initProjections(desc.rows, proj_orthogonal);
-
-  // Set the size of the descriptors
-  h_size_ = params_.num_proj * desc.cols;
+  initProjections();
 
   // Set initialized to true
   initialized_ = true;
@@ -51,31 +32,69 @@ void haloc::Hash::init(Mat desc, bool proj_orthogonal)
   * @return hash vector
   * \param cvMat containing the descriptors of the image
   */
-vector<float> haloc::Hash::getHash(Mat desc)
+haloc::Hash::HashBucket haloc::Hash::getHash(vector<Mat> desc)
 {
-  // initialize the histogram with 0's
-  vector<float> hash(h_size_, 0.0);
+  // Init the output
+  haloc::Hash::HashBucket hash_bucket;
 
-  // Sanity check
-  if (desc.rows == 0) return hash;
-
-  // Project the descriptors
-  uint k = 0;
-  for (uint i=0; i<r_.size(); i++)
+  // Get the length of the descriptors
+  if (desc_length_ == -1)
   {
-    for (int n=0; n<desc.cols; n++)
+    for (uint i=0; i<desc.size(); i++)
     {
-      float desc_sum = 0.0;
-      for (uint m=0; m<desc.rows; m++)
+      if (desc[i].cols > 0)
       {
-        desc_sum += r_[i][m]*desc.at<float>(m, n);
+        desc_length_ = desc[i].cols;
+        break;
       }
-      hash[k] = desc_sum/(float)desc.rows;
-      k++;
     }
   }
 
-  return hash;
+  // Sanity check
+  if (desc_length_ == -1 || desc.size() == 0) return hash_bucket;
+
+  // Initialize the hash properties
+  Mat hash_value(desc.size(), desc_length_, CV_32F);
+  vector<int> num_features;
+
+  // Get a hash for every bucket
+  for (uint i=0; i<desc.size(); i++)
+  {
+    // Take the projection vector and the descriptors for this bucket
+    vector<float> br = r_[i];
+    Mat b_desc = desc[i];
+
+    // Check if there are descriptors into this bucket
+    if (b_desc.rows == 0)
+    {
+      num_features.push_back(0);
+      Mat zeros = Mat::zeros(1, desc_length_, CV_32F);
+      zeros.copyTo(hash_value.row(i));
+      continue;
+    }
+
+    // Sanity check
+    int max_features = b_desc.rows;
+    if (max_features > bucket_max_size_) max_features = bucket_max_size_;
+
+    // Project the descriptors
+    vector<float> b_hash_value;
+    for (int n=0; n<b_desc.cols; n++)
+    {
+      float desc_sum = 0.0;
+      for (uint m=0; m<max_features; m++)
+      {
+        desc_sum += br[m]*b_desc.at<float>(m, n);
+      }
+      hash_value.at<float>(i, n) = desc_sum/(float)max_features;
+    }
+    num_features.push_back(max_features);
+  }
+
+  // Build the bucketed hash structure and exit
+  hash_bucket.num_features = num_features;
+  hash_bucket.hash_value = hash_value;
+  return hash_bucket;
 }
 
 /** \brief Compute the random vector/s needed to generate the hash
@@ -83,76 +102,19 @@ vector<float> haloc::Hash::getHash(Mat desc)
   * \param size of the initial descriptor matrix.
   * \param true to generate 'n' random orthogonal projections, false to generate 'n' random non-orthogonal projections.
   */
-void haloc::Hash::initProjections(int desc_size, bool orthogonal)
+void haloc::Hash::initProjections()
 {
   // Initializations
   int seed = time(NULL);
   r_.clear();
 
-  // The size of the descriptors may vary... We multiply the current descriptor size
-  // for a scalar to handle the larger cases.
-  int v_size = 6*desc_size;
-
-  if (orthogonal)
+  // Get a random unit vector for every bucket
+  const int num_buckets = 9;
+  for (uint i=0; i<num_buckets; i++)
   {
-    // We will generate N-orthogonal vectors creating a linear system of type Ax=b.
-
-    // Generate a first random vector
-    vector<float> r = compute_random_vector(seed, v_size);
+    vector<float> r = compute_random_vector(seed+i, bucket_max_size_);
     r_.push_back(unit_vector(r));
-
-    // Generate the set of orthogonal vectors
-    for (uint i=1; i<params_.num_proj; i++)
-    {
-      // Generate a random vector of the correct size
-      vector<float> new_v = compute_random_vector(seed + i, v_size - i);
-
-      // Get the right terms (b)
-      VectorXf b(r_.size());
-      for (uint n=0; n<r_.size(); n++)
-      {
-        vector<float> cur_v = r_[n];
-        float sum = 0.0;
-        for (uint m=0; m<new_v.size(); m++)
-        {
-          sum += new_v[m]*cur_v[m];
-        }
-        b(n) = -sum;
-      }
-
-      // Get the matrix of equations (A)
-      MatrixXf A(i, i);
-      for (uint n=0; n<r_.size(); n++)
-      {
-        uint k=0;
-        for (uint m=r_[n].size()-i; m<r_[n].size(); m++)
-        {
-          A(n,k) = r_[n][m];
-          k++;
-        }
-      }
-
-      // Apply the solver
-      VectorXf x = A.colPivHouseholderQr().solve(b);
-
-      // Add the solutions to the new vector
-      for (uint n=0; n<r_.size(); n++)
-        new_v.push_back(x(n));
-
-      // Push the new vector
-      r_.push_back(unit_vector(new_v));
-    }
   }
-  else
-  {
-    for (uint i=0; i<params_.num_proj; i++)
-    {
-      vector<float> r = compute_random_vector(seed + i, v_size);
-      r_.push_back(unit_vector(r));
-    }
-  }
-
-
 }
 
 /** \brief Computes a random vector of some size
@@ -188,17 +150,63 @@ vector<float> haloc::Hash::unit_vector(vector<float> x)
   return x;
 }
 
-/** \brief Compute the distance between 2 hashes
+/** \brief Compute the hash matching between 2 hashes.
   * @return the distance
-  * \param hash 1
-  * \param hash 2
+  * \param hash query
+  * \param hash trainer
   */
-float haloc::Hash::match(vector<float> hash_1, vector<float> hash_2)
+float haloc::Hash::matching(Hash::HashBucket hash_q, Hash::HashBucket hash_t)
 {
-  // Compute the distance
-  float sum = 0.0;
-  for (uint i=0; i<hash_1.size(); i++)
-    sum += fabs(hash_1[i] - hash_2[i]);
+  // Get the mask matrix to enter to knnmatcher.
+  // This is because buckets with a very different number of keypoints are not valid for matching.
+  // Moreover, buckets with a small number of keypoints are rejected.
+  uint q_size = hash_q.num_features.size();
+  uint t_size = hash_t.num_features.size();
+  int max_feat_num_q = *max_element(hash_q.num_features.begin(), hash_q.num_features.end());
+  int max_feat_num_t = *max_element(hash_t.num_features.begin(), hash_t.num_features.end());
+  int max_feat_num = max(max_feat_num_q, max_feat_num_t);
+  Mat mask(q_size, t_size, CV_8UC1);
+  for (uint n=0; n<q_size; n++)
+  {
+    int hash_q_feat = hash_q.num_features[n];
+    for (uint m=0; m<t_size; m++)
+    {
+      int hash_c_feat = hash_t.num_features[m];
 
-  return sum;
+      // Check if number of features are coincident
+      int max_feat = max(hash_q_feat, hash_c_feat);
+      int min_feat = min(hash_q_feat, hash_c_feat);
+      mask.at<uchar>(n, m) = ( (min_feat > max_feat*0.6) && (max_feat > max_feat_num*0.3) );
+    }
+  }
+
+  // Brute force matching
+  const int knn = 2;
+  Ptr<DescriptorMatcher> descriptor_matcher;
+  descriptor_matcher = DescriptorMatcher::create("BruteForce");
+  vector<vector<DMatch> > knn_matches;
+  descriptor_matcher->knnMatch(hash_q.hash_value, hash_t.hash_value, knn_matches, knn, mask);
+
+  // Crosscheck threshold
+  const float ratio = 0.7;
+  vector<DMatch> matches;
+  for (size_t m = 0; m < knn_matches.size(); m++)
+  {
+    // Sanity checks
+    if (knn_matches[m].size() < 2) continue;
+    if (knn_matches[m][0].queryIdx < 0 || knn_matches[m][0].queryIdx > q_size ||
+        knn_matches[m][0].trainIdx < 0 || knn_matches[m][0].trainIdx > t_size) continue;
+
+    // Check the mask
+    bool match_allowed = mask.empty() ? true : mask.at<uchar>(
+      knn_matches[m][0].queryIdx, knn_matches[m][0].trainIdx) > 0;
+    if (match_allowed && knn_matches[m][0].distance <= knn_matches[m][1].distance * ratio)
+    {
+      matches.push_back(knn_matches[m][0]);
+    }
+  }
+
+  // TODO: Normalize the number of matches and the distances. YOU KNOW THAT THE MAXIMUM NUMBER OF MATCHES IS 9!!!!
+
+  return 0.0;
 }

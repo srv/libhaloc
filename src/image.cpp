@@ -28,6 +28,7 @@ vector<Point2f> haloc::Image::getKp() { return kp_; }
 void haloc::Image::setKp(vector<Point2f> kp) { kp_ = kp; }
 Mat haloc::Image::getDesc() { return desc_; }
 void haloc::Image::setDesc(Mat desc) { desc_ = desc; }
+vector<Mat> haloc::Image::getBucketedDesc() { return b_desc_; };
 vector<Point3f> haloc::Image::get3D() { return points_3d_; };
 void haloc::Image::set3D(vector<Point3f> points_3d) { points_3d_ = points_3d; };
 string haloc::Image::getName() { return name_; };
@@ -51,15 +52,19 @@ void haloc::Image::setMono(const Mat& img, string name)
   name_ = name;
 
   // Extract keypoints
-  kp_.clear();
-  desc_.release();
   vector<KeyPoint> kp;
   haloc::Utils::keypointDetector(img, kp, params_.desc_type);
 
   // Extract descriptors
+  desc_.release();
   haloc::Utils::descriptorExtraction(img, kp, desc_, params_.desc_type);
 
-  // Convert
+  // Bucket the descriptors
+  b_desc_.clear();
+  b_desc_ = bucketDescriptors(kp, desc_, img.cols, img.rows);
+
+  // Convert kp
+  kp_.clear();
   for(int i=0; i<kp.size(); i++)
     kp_.push_back(kp[i].pt);
 }
@@ -74,20 +79,19 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
   name_ = name;
 
   // Extract keypoints (left)
-  kp_.clear();
-  desc_.release();
   vector<KeyPoint> kp_l;
   haloc::Utils::keypointDetector(img_l, kp_l, params_.desc_type);
 
   // Extract descriptors (left)
-  haloc::Utils::descriptorExtraction(img_l, kp_l, desc_, params_.desc_type);
+  Mat desc_l;
+  haloc::Utils::descriptorExtraction(img_l, kp_l, desc_l, params_.desc_type);
 
   // Extract keypoints (right)
-  Mat desc_r;
   vector<KeyPoint> kp_r;
   haloc::Utils::keypointDetector(img_r, kp_r, params_.desc_type);
 
   // Extract descriptors (right)
+  Mat desc_r;
   haloc::Utils::descriptorExtraction(img_r, kp_r, desc_r, params_.desc_type);
 
   // Find matches between left and right images
@@ -96,13 +100,13 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
 
   if(params_.desc_matching_type == "CROSSCHECK")
   {
-    haloc::Utils::crossCheckThresholdMatching(desc_,
+    haloc::Utils::crossCheckThresholdMatching(desc_l,
         desc_r, params_.desc_thresh_ratio, match_mask, matches);
   }
   else if (params_.desc_matching_type == "RATIO")
   {
-    haloc::Utils::ratioMatching(desc_,
-        desc_r, params_.desc_thresh_ratio, matches);
+    haloc::Utils::ratioMatching(desc_l,
+        desc_r, params_.desc_thresh_ratio, match_mask, matches);
   }
   else
   {
@@ -131,13 +135,49 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
                                     kp_r[index_right].pt,
                                     world_point);
     matched_kp_l.push_back(kp_l[index_left]);
-    matched_desc_l.push_back(desc_.row(index_left));
+    matched_desc_l.push_back(desc_l.row(index_left));
     matched_3d_points.push_back(world_point);
   }
 
-  // Save properties
+  // Save descriptors
+  desc_ = matched_desc_l;
+
+  // Convert keypoints
+  kp_.clear();
   for(int i=0; i<matched_kp_l.size(); i++)
     kp_.push_back(matched_kp_l[i].pt);
-  desc_ = matched_desc_l;
+
+  // Bucket the descriptors
+  b_desc_ = bucketDescriptors(matched_kp_l, matched_desc_l, img_l.cols, img_l.rows);
+
+  // Save 3D
   points_3d_ = matched_3d_points;
+}
+
+/** \brief Bucket the descriptors.
+  * @return the matrix of descriptors bucketed.
+  * \param input keypoints vector.
+  * \param input descriptors matrix.
+  * \param image width.
+  * \param image height.
+  */
+vector<Mat> haloc::Image::bucketDescriptors(vector<KeyPoint> kp, Mat desc, int i_width, int i_height)
+{
+  // Allocate number of buckets needed
+  const int bucket_div = 3;
+  vector<Mat> buckets( (int)(bucket_div*bucket_div) );
+
+  // Compute the bucket width and height
+  int b_width = (int)ceil(i_width/bucket_div);
+  int b_height = (int)ceil(i_height/bucket_div);
+
+  // Assign matches to their buckets
+  for (uint i=0; i<kp.size(); i++)
+  {
+    int u = (int)floor(kp[i].pt.x/b_width);
+    int v = (int)floor(kp[i].pt.y/b_height);
+    buckets[v*bucket_div+u].push_back(desc.row(i));
+  }
+
+  return buckets;
 }
