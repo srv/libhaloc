@@ -6,6 +6,7 @@
 haloc::Image::Params::Params() :
   desc_type("SIFT"),
   desc_matching_type("CROSSCHECK"),
+  max_keypoints(DEFAULT_MAX_KEYPOINTS),
   desc_thresh_ratio(DEFAULT_DESC_THRESH_RATIO),
   min_matches(DEFAULT_MIN_MATCHES),
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH)
@@ -44,8 +45,9 @@ void haloc::Image::setCameraModel(image_geometry::StereoCameraModel stereo_camer
 
 /** \brief Compute the keypoints and descriptors for one image (mono)
   * \param cvMat image
+  * \param Human readable name for this node.
   */
-void haloc::Image::setMono(const Mat& img, string name)
+bool haloc::Image::setMono(const Mat& img, string name)
 {
   // Identify
   name_ = name;
@@ -56,19 +58,30 @@ void haloc::Image::setMono(const Mat& img, string name)
   vector<KeyPoint> kp;
   haloc::Utils::keypointDetector(img, kp, params_.desc_type);
 
+  /*
+  // Check if image is descriptive enough
+  if (kp.size() < params_.max_keypoints)
+  {
+    ROS_WARN("[Haloc:] Image not descriptive enough. If you see many warnings like this decrease the max_keypoint parameter.");
+    return false;
+  }
+  */
+
   // Extract descriptors
   haloc::Utils::descriptorExtraction(img, kp, desc_, params_.desc_type);
 
   // Convert
   for(int i=0; i<kp.size(); i++)
     kp_.push_back(kp[i].pt);
+
+  return true;
 }
 
 /** \brief Compute the keypoints and descriptors for two images (stereo)
   * \param cvMat image for left frame
   * \param cvMat image for right frame
   */
-void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
+bool haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
 {
   // Identify
   name_ = name;
@@ -78,6 +91,15 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
   desc_.release();
   vector<KeyPoint> kp_l;
   haloc::Utils::keypointDetector(img_l, kp_l, params_.desc_type);
+
+  /*
+  // Check if image is descriptive enough (only left is needed for loop closing)
+  if (kp_l.size() < params_.max_keypoints)
+  {
+    ROS_WARN("[Haloc:] Image not descriptive enough. If you see many warnings like this decrease the max_keypoint parameter.");
+    return false;
+  }
+  */
 
   // Extract descriptors (left)
   haloc::Utils::descriptorExtraction(img_l, kp_l, desc_, params_.desc_type);
@@ -140,4 +162,6 @@ void haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
     kp_.push_back(matched_kp_l[i].pt);
   desc_ = matched_desc_l;
   points_3d_ = matched_3d_points;
+
+  return true;
 }

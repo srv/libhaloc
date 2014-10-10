@@ -33,6 +33,7 @@ public:
     string desc_type;                   //!> Type of the descriptors (can be SIFT, SURF).
     string desc_matching_type;          //!> Can be "CROSSCHECK" or "RATIO"
     double desc_thresh_ratio;           //!> Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
+    int max_keypoints;                  //!> Maximum number of keypoints per image.
     int epipolar_thresh;                //!> Epipolar threshold.
     int min_neighbour;                  //!> Minimum number of neighbours that will be skipped for the loop closure (typically between 5-20, but depends on the frame rate).
     int n_candidates;                   //!> Get the n first candidates of the hash matching (typically between 1-5).
@@ -44,6 +45,7 @@ public:
 
     // Default values
     static const int                    DEFAULT_NUM_PROJ = 2;
+    static const int                    DEFAULT_MAX_KEYPOINTS = 250;
     static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
     static const int                    DEFAULT_MIN_NEIGHBOUR = 10;
@@ -72,25 +74,34 @@ public:
                       Mat camera_matrix);
 
   // Compute kp, desc and hash for one image (mono version).
-  void setNode(Mat img,
+  bool setNode(Mat img);
+  bool setNode(Mat img,
                string name);
 
   // Compute kp, desc and hash for two images (stereo version).
-  void setNode(Mat img_l,
+  bool setNode(Mat img_l,
+               Mat img_r);
+  bool setNode(Mat img_l,
                Mat img_r,
                string name);
 
+  // Retrieve the candidates to close loop with the last saved node.
+  void getCandidates(vector< pair<int,float> >& matchings);
+
+  // Retrieve the candidates to close loop with the specified node.
+  void getCandidates(int image_id,
+                     vector< pair<int,float> >& matchings);
+
   // Try to find a loop closure for the last saved node.
-  bool getLoopClosure(int& lc_img_idx,
+  bool getLoopClosure(int& lc_img_id,
                       string& lc_name);
-  bool getLoopClosure(int& lc_img_idx,
+  bool getLoopClosure(int& lc_img_id,
                       string& lc_name,
                       tf::Transform& trans);
-
   // Try to find a loop closure given 2 image identifiers
-  bool getLoopClosureById(string image_id_ref,
-                          string image_id_cur,
-                          tf::Transform& trans);
+  bool getLoopClosure(string image_id_ref,
+                      string image_id_cur,
+                      tf::Transform& trans);
 
 private:
 
@@ -106,10 +117,12 @@ private:
   Params params_;                       //!> Stores parameters
   Image img_;                           //!> Image object
   Hash hash_;                           //!> Hash object
-  int img_idx_;                         //!> Incremental index for the stored images
+  int img_id_;                          //!> Incremental index for the stored images
   Mat camera_matrix_;                   //!> Used to save the camera matrix
   vector< pair<int, vector<float> > > hash_table_;  //!> Hash table
   vector<int> lc_candidate_positions_;  //!> Loop closure candidate positions
+  vector<int> prob_idx_;                //!> Image indices of probability vector
+  vector<float> prob_val_;              //!> Probability vector
 
 };
 

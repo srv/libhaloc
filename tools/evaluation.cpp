@@ -5,6 +5,8 @@
 #include <opencv2/opencv.hpp>
 #include <opencv2/nonfree/features2d.hpp>
 #include <boost/filesystem.hpp>
+#include <fstream>
+#include "libhaloc/lc.h"
 
 namespace fs=boost::filesystem;
 
@@ -19,6 +21,7 @@ class EvaluationNode
     // Public parameters
     string training_dir_;
     string running_dir_;
+    haloc::LoopClosure lc_;
 
     // Class constructor
     EvaluationNode() : nhp_("~") {}
@@ -32,6 +35,7 @@ class EvaluationNode
       nhp_.param<string>("vocab_path", vocab_path_, "vocab.yml");
       nhp_.param<string>("cl_tree_path", cl_tree_path_, "clTree.yml");
       nhp_.param<string>("trainbows_path", trainbows_path_, "trainbows.yml");
+      nhp_.param<string>("gt_file", gt_file_, std::string(""));
 
       // BoW trainer parameters
       nhp_.param<int>("max_images", max_images_, 50);
@@ -46,6 +50,19 @@ class EvaluationNode
       nhp_.param<int>("self_match_window", self_match_window_, 1);
       nhp_.param<bool>("disable_unknown_match", disable_unknown_match_, false);
       nhp_.param<bool>("add_only_new_places", add_only_new_places_, false);
+
+      // Libhaloc
+      haloc::LoopClosure::Params lc_params;
+      nhp_.param("work_dir", lc_params.work_dir, string(""));
+      nhp_.param("desc_type", lc_params.desc_type, string("SIFT"));
+      nhp_.param("desc_matching_type", lc_params.desc_matching_type, string("CROSSCHECK"));
+      nhp_.param<int>("max_keypoints", lc_params.max_keypoints, 0.7);
+      nhp_.param<double>("desc_thresh_ratio", lc_params.desc_thresh_ratio, 0.7);
+      nhp_.param<int>("min_neighbour", lc_params.min_neighbour, 1);
+      nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
+      nhp_.param<int>("min_matches", lc_params.min_matches, 15);
+      nhp_.param<int>("min_inliers", lc_params.min_inliers, 12);
+      lc_.setParams(lc_params);
     }
 
     // Initialize the node
@@ -65,6 +82,8 @@ class EvaluationNode
       // - Match to nothing
       confusion_mat_ = Mat::zeros(2,2,CV_64FC1);
 
+      // Libhaloc
+      lc_.init();
     }
 
     // Openfabmap learning stage
@@ -149,14 +168,38 @@ class EvaluationNode
       sort(v.begin(), v.end());
       vec::const_iterator it(v.begin());
 
+      // Read the ground truth file
+      vector< vector<int> > ground_truth;
+      if (!gt_file_.empty())
+      {
+        ifstream in(gt_file_.c_str());
+        if (!in) ROS_ERROR("[Haloc:] Ground truth file does not exist.");
+        for (uint x=0; x<v.size(); x++)
+        {
+          vector<int> row;
+          for (uint y=0; y<v.size(); y++)
+          {
+            int num;
+            in >> num;
+            row.push_back(num);
+          }
+          ground_truth.push_back(row);
+        }
+        in.close();
+      }
+
       // Initialization
       int image_id = -1;
       bool first_frame = true;
       vector<int> to_img_seq;
 
       // Iterate over all images
+      //int j=0;
       while (it!=v.end())
       {
+        //j++;
+        //if (j==40) break;
+
         if (fs::is_directory(*it))
         {
           // Next directory entry and continue
@@ -170,12 +213,44 @@ class EvaluationNode
         Mat img = imread(path, CV_LOAD_IMAGE_COLOR);
         image_id++;
 
+
+
+
+        // HALOC ---------------------------------------
+        ros::WallTime haloc_start = ros::WallTime::now();
+        bool valid = lc_.setNode(img, filename);
+        if (valid) {
+          vector< pair<int,float> > hash_matching;
+          lc_.getCandidates(hash_matching);
+          ros::WallDuration haloc_time = ros::WallTime::now() - haloc_start;
+          cout << endl << endl;
+          ROS_INFO_STREAM("++++++++++++++++++++++ " << image_id << " ++++++++++++++++++++++");
+          cout << "HALOC [ ";
+          for (int i=0; i<hash_matching.size();i++)
+            cout << hash_matching[i].first << " ";
+          cout << "]   \t"  << haloc_time.toSec() << " sec." << endl;
+          /*
+          cout << "[ ";
+          for (int i=0; i<hash_matching.size();i++)
+            cout << hash_matching[i].second << " ";
+          cout << "]" << endl;
+          ROS_INFO_STREAM("HALOC TIME: " << haloc_time.toSec() << " sec.");
+          */
+        }
+
+
+
+
+        // OPENFABMAP ----------------------------------
+
+        ros::WallTime bow_start = ros::WallTime::now();
         Mat bow;
-        ROS_DEBUG("[Haloc:] Detector.....");
         vector<KeyPoint> kpts;
         detector_->detect(img, kpts);
-        ROS_DEBUG("[Haloc:] Compute discriptors...");
         bide_->compute(img, kpts, bow);
+
+        vector<int> matched_to_img_seq;
+        vector<double> matched_to_img_match;
 
         // Check if the frame could be described
         if (!bow.empty() && kpts.size() > min_descriptor_count_)
@@ -183,7 +258,6 @@ class EvaluationNode
           // IF NOT the first frame processed
           if (!first_frame)
           {
-            ROS_DEBUG("[Haloc:] Compare bag of words...");
             vector<of2::IMatch> matches;
 
             // Find match likelyhoods for this 'bow'
@@ -214,8 +288,6 @@ class EvaluationNode
 
             // Prepare in descending match likelihood order
             int match_img_seq;
-            vector<int> matched_to_img_seq;
-            vector<double> matched_to_img_match;
             for (vector<of2::IMatch>::reverse_iterator match_iter = matches.rbegin(); match_iter != matches.rend(); ++match_iter)
             {
               // Limit the number of matches published (by 'maxMatches_' OR 'minMatchValue_')
@@ -234,21 +306,6 @@ class EvaluationNode
               matched_to_img_seq.push_back(match_img_seq);
               matched_to_img_match.push_back(match_iter->match);
             }
-
-            // IF filtered matches were found
-            if (matched_to_img_seq.size() > 0)
-            {
-              ROS_INFO_STREAM("IMAGE " << image_id << " can close loop with:");
-              cout << "[ ";
-              for (int i=0; i<matched_to_img_seq.size();i++){
-                cout << matched_to_img_seq[i] << " ";
-              }
-              cout << "]" << endl << "[ ";
-              for (int i=0; i<matched_to_img_match.size();i++){
-                cout << matched_to_img_match[i] << " ";
-              }
-              cout << "]" << endl;
-            }
           }
           else
           {
@@ -257,10 +314,37 @@ class EvaluationNode
             first_frame = false;
           }
         }
-        else
+
+        // Log
+        ros::WallDuration bow_time = ros::WallTime::now() - bow_start;
+        cout << "FABMAP [ ";
+        for (int i=0; i<matched_to_img_seq.size();i++)
+          cout << matched_to_img_seq[i] << " ";
+        cout << "]   \t \t \t"  << bow_time.toSec() << " sec." << endl;
+        /*
+        cout << "[ ";
+        for (int i=0; i<matched_to_img_match.size();i++)
+          cout << matched_to_img_match[i] << " ";
+        cout << "]" << endl;
+        */
+
+
+
+        // GROUND TRUTH ----------------------------------
+
+        if (ground_truth.size() > image_id)
         {
-          ROS_DEBUG("[Haloc:] Image not descriptive enough, ignoring.");
+          // Get the current row
+          vector<int> gt_row = ground_truth[image_id];
+          cout << "GT [ ";
+          for (uint i=0; i<gt_row.size(); i++)
+          {
+            if (gt_row[i] == 1)
+              cout << i << " ";
+          }
+          cout << "]" << endl;
         }
+
 
         // Next directory entry
         it++;
@@ -278,6 +362,7 @@ class EvaluationNode
     string vocab_path_;
     string cl_tree_path_;
     string trainbows_path_;
+    string gt_file_;
 
     // OpenFABMap2
     of2::FabMap *fabMap_;
@@ -432,6 +517,8 @@ int main(int argc, char** argv)
     node.of2Run();
   }
 
+  // Stop libhaloc
+  node.lc_.finalize();
 
   ros::spin();
   return 0;

@@ -9,6 +9,7 @@
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
+#include <boost/math/distributions.hpp>
 
 namespace fs=boost::filesystem;
 
@@ -19,6 +20,7 @@ haloc::LoopClosure::Params::Params() :
   work_dir(""),
   desc_type("SIFT"),
   desc_matching_type("CROSSCHECK"),
+  max_keypoints(DEFAULT_MAX_KEYPOINTS),
   desc_thresh_ratio(DEFAULT_DESC_THRESH_RATIO),
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH),
   min_neighbour(DEFAULT_MIN_NEIGHBOUR),
@@ -46,6 +48,7 @@ void haloc::LoopClosure::setParams(const Params& params)
   cout << "  work_dir           = " << params_.work_dir << endl;
   cout << "  desc_type          = " << params_.desc_type << endl;
   cout << "  desc_matching_type = " << params_.desc_matching_type << endl;
+  cout << "  max_keypoints      = " << params_.max_keypoints << endl;
   cout << "  desc_thresh_ratio  = " << params_.desc_thresh_ratio << endl;
   cout << "  epipolar_thresh    = " << params_.epipolar_thresh << endl;
   cout << "  min_neighbour      = " << params_.min_neighbour << endl;
@@ -88,6 +91,7 @@ void haloc::LoopClosure::init()
   haloc::Image::Params img_params;
   img_params.desc_type = params_.desc_type;
   img_params.desc_matching_type = params_.desc_matching_type;
+  img_params.max_keypoints = params_.max_keypoints;
   img_params.desc_thresh_ratio = params_.desc_thresh_ratio;
   img_params.min_matches = params_.min_matches;
   img_params.epipolar_thresh = params_.epipolar_thresh;
@@ -100,7 +104,7 @@ void haloc::LoopClosure::init()
 
   // Init main variables
   hash_table_.clear();
-  img_idx_ = 0;
+  img_id_ = 0;
 }
 
 /** \brief Finalizes the loop closure class.
@@ -121,53 +125,203 @@ void haloc::LoopClosure::finalize()
 }
 
 /** \brief Compute kp, desc and hash for one image (mono version).
+  * @return true if valid node, false otherwise.
   * \param cvMat containing the image.
-  * \param human readable name for this image
   */
-void haloc::LoopClosure::setNode(Mat img, string name)
+bool haloc::LoopClosure::setNode(Mat img)
+{
+  string img_name = boost::lexical_cast<string>(img_id_);
+  return setNode(img, img_name);
+}
+
+/** \brief Compute kp, desc and hash for one image (mono version).
+  * @return true if valid node, false otherwise.
+  * \param cvMat containing the image.
+  * \param human readable name for this node.
+  */
+bool haloc::LoopClosure::setNode(Mat img, string name)
 {
   // Set the image
-  img_.setMono(img, name);
+  if(!img_.setMono(img, name)) return false;
+
+  // Initialize hash
+  if (!hash_.isInitialized())
+    hash_.init(img_.getDesc(), true);
+
+  // Save hash to table
+  hash_table_.push_back(make_pair(img_id_, hash_.getHash(img_.getDesc())));
 
   // Save kp and descriptors
   vector<Point3f> empty;
-  FileStorage fs(params_.work_dir+"/"+boost::lexical_cast<string>(img_idx_)+".yml", FileStorage::WRITE);
+  FileStorage fs(params_.work_dir+"/"+boost::lexical_cast<string>(img_id_)+".yml", FileStorage::WRITE);
+  write(fs, "id", img_id_);
   write(fs, "name", name);
   write(fs, "kp", img_.getKp());
   write(fs, "desc", img_.getDesc());
   write(fs, "threed", empty);
   fs.release();
-  img_idx_++;
+  img_id_++;
+
+  return true;
 }
 
 /** \brief Compute kp, desc and hash for two images (stereo version).
+  * @return true if valid node, false otherwise.
+  * @return the assigned node name.
   * \param cvMat containing the left image.
   * \param cvMat containing the right image.
-  * \param human readable name for this image
   */
-void haloc::LoopClosure::setNode(Mat img_l, Mat img_r, string name)
+bool haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
+{
+  string img_name = boost::lexical_cast<string>(img_id_);
+  return setNode(img_l, img_r, img_name);
+}
+
+/** \brief Compute kp, desc and hash for two images (stereo version).
+  * @return true if valid node, false otherwise.
+  * \param cvMat containing the left image.
+  * \param cvMat containing the right image.
+  * \param human readable name for this node.
+  */
+bool haloc::LoopClosure::setNode(Mat img_l, Mat img_r, string name)
 {
   // Set the image
-  img_.setStereo(img_l, img_r, name);
+  if(!img_.setStereo(img_l, img_r, name)) return false;
+
+  // Initialize hash
+  if (!hash_.isInitialized())
+    hash_.init(img_.getDesc(), true);
+
+  // Save hash to table
+  hash_table_.push_back(make_pair(img_id_, hash_.getHash(img_.getDesc())));
 
   // Save kp and descriptors
-  FileStorage fs(params_.work_dir+"/"+boost::lexical_cast<string>(img_idx_)+".yml", FileStorage::WRITE);
+  FileStorage fs(params_.work_dir+"/"+boost::lexical_cast<string>(img_id_)+".yml", FileStorage::WRITE);
+  write(fs, "id", img_id_);
   write(fs, "name", name);
   write(fs, "kp", img_.getKp());
   write(fs, "desc", img_.getDesc());
   write(fs, "threed", img_.get3D());
   fs.release();
-  img_idx_++;
+  img_id_++;
+
+  return true;
+}
+
+/** \brief Get the best n_candidates to close loop with the last image.
+  * @return a hash matching vector containing the best image matchings and its likelihood.
+  */
+void haloc::LoopClosure::getCandidates(vector< pair<int,float> >& matchings)
+{
+  getCandidates(img_id_-1, matchings);
+}
+
+/** \brief Get the best n_candidates to close loop with the image specified by id.
+  * \param image id.
+  */
+void haloc::LoopClosure::getCandidates(int image_id, vector< pair<int,float> >& matchings)
+{
+  // Check if enough neighbours
+  if (hash_table_.size() - 1 <= params_.min_neighbour || hash_table_.size() == 0) return;
+
+  // The query hash
+  vector<float> hash_q = hash_table_[image_id].second;
+
+  // Loop over all the hashes stored
+  vector< pair<int,float> > tmp_matchings;
+  for (uint i=0; i<hash_table_.size()-params_.min_neighbour-1; i++)
+  {
+    // Do not compute the hash matching with itself
+    if (i == image_id) continue;
+
+    vector<float> hash_t = hash_table_[i].second;
+    float m = hash_.match(hash_q, hash_t);
+    tmp_matchings.push_back(make_pair(hash_table_[i].first, m));
+  }
+
+  // Sort the hash matchings
+  sort(tmp_matchings.begin(), tmp_matchings.end(), haloc::Utils::sortByMatching);
+
+  // Retrieve the first n_candidates
+  matchings.clear();
+  int max_size = params_.n_candidates;
+  if (max_size > tmp_matchings.size()) max_size = tmp_matchings.size();
+  int min_idx = -1;
+  int max_idx = -1;
+  for (uint i=0; i<max_size; i++)
+  {
+    if (min_idx < 0 || tmp_matchings[i].first < min_idx) min_idx = tmp_matchings[i].first;
+    if (max_idx < 0 || tmp_matchings[i].first > max_idx) max_idx = tmp_matchings[i].first;
+    matchings.push_back(tmp_matchings[i]);
+  }
+
+  // Get minimum and maximum candidate indices to build the probability vector
+  const int space = 10;
+  vector<int> prob_idx;
+  vector<float> prob_val;
+  for (int i=0; i<=(max_idx-min_idx)+2*space; i++)
+  {
+    int cur_idx = min_idx - space + i;
+    prob_idx.push_back(cur_idx);
+
+    // Compute the probability for every candidate
+    float prob = 0.0;
+    for (uint j=0; j<matchings.size(); j++)
+    {
+      // Create the normal distribution for this matching
+      boost::math::normal_distribution<> nd((float)matchings[j].first,2.0);
+      prob += (float)(matchings.size()-j) * boost::math::pdf(nd, (float)cur_idx);
+    }
+    prob_val.push_back(prob);
+  }
+
+  // Merge current probability with the previous
+  vector<float> matchings_prob;
+  for (uint i=0; i<matchings.size(); i++)
+  {
+    // Find previous value
+    float prev_prob = 0.0;
+    vector<int>::iterator itp = find(prob_idx_.begin(), prob_idx_.end(), matchings[i].first);
+    if (itp != prob_idx_.end())
+    {
+      int idx = distance(prob_idx_.begin(), itp);
+      prev_prob = prob_val_[idx];
+    }
+
+    // Find current value
+    float cur_prob = 0.0;
+    vector<int>::iterator itc = find(prob_idx.begin(), prob_idx.end(), matchings[i].first);
+    if (itc != prob_idx.end())
+    {
+      int idx = distance(prob_idx.begin(), itc);
+      cur_prob = prob_val[idx];
+    }
+
+    // Add and save
+    matchings_prob.push_back(prev_prob + cur_prob);
+  }
+
+  // Save for the next execution
+  prob_idx_ = prob_idx;
+  prob_val_ = prob_val;
+
+  // Order matchings by probability
+  vector< pair<int, float> > to_sort;
+  for (uint i=0; i<matchings.size(); i++)
+    to_sort.push_back(make_pair(matchings[i].first, matchings_prob[i]));
+
+  sort(to_sort.begin(), to_sort.end(), haloc::Utils::sortByProbability);
+  matchings = to_sort;
 }
 
 /** \brief Try to find a loop closure between last node and all other nodes.
   * @return true if valid loop closure, false otherwise.
   * \param Return the index of the image that closes loop (-1 if no loop).
   */
-bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name)
+bool haloc::LoopClosure::getLoopClosure(int& lc_img_id, string& lc_name)
 {
   tf::Transform trans;
-  return getLoopClosure(lc_img_idx, lc_name, trans);
+  return getLoopClosure(lc_img_id, lc_name, trans);
 }
 
 /** \brief Try to find a loop closure between last node and all other nodes.
@@ -176,59 +330,32 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name)
   * \param Return the name of the image that closes loop (empty if no loop).
   * \param Return the transform between nodes if loop closure is valid.
   */
-bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Transform& trans)
+bool haloc::LoopClosure::getLoopClosure(int& lc_img_id, string& lc_name, tf::Transform& trans)
 {
-  // Initialize hash
-  if (!hash_.isInitialized())
-  {
-    hash_.init(img_.getDesc(), true);
-    return false;
-  }
-
-  // Compute the hash for this image
-  vector<float> hash_val = hash_.getHash(img_.getDesc());
-  hash_table_.push_back(make_pair(img_idx_-1, hash_val));
-
-  // Check if enough neighbours
-  if (hash_table_.size() <= params_.min_neighbour)
-    return false;
-
-  // Compute the hash matchings for this image with all other sequence
+  // Get the candidates to close loop
   vector< pair<int,float> > matchings;
-  for (uint i=0; i<hash_table_.size()-params_.min_neighbour; i++)
-  {
-    // Hash matching
-    vector<float> cur_hash = hash_table_[i].second;
-    float m = hash_.match(hash_val, cur_hash);
-    matchings.push_back(make_pair(hash_table_[i].first, m));
-  }
-
-  // Sort the hash matchings
-  sort(matchings.begin(), matchings.end(), haloc::Utils::sortByMatching);
+  getCandidates(matchings);
+  if (matchings.size() == 0) return false;
 
   // Check for loop closure
   trans.setIdentity();
-  lc_img_idx = -1;
+  lc_img_id = -1;
   lc_name = "";
-  int best_m = 0;
   int matches = 0;
   int max_matches = 0;
   int inliers = 0;
   int max_inliers = 0;
   bool valid = false;
   string best_lc_found = "";
-  while (best_m<params_.n_candidates)
+  int valid_idx = 0;
+  for (uint i=0; i<matchings.size(); i++)
   {
-    // Sanity check
-    if(best_m >= matchings.size())
-    {
-      best_m = 0;
-      break;
-    }
+    // Store the index
+    valid_idx = i;
 
     // Loop-closure?
     valid = compute(img_,
-                    params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first)+".yml",
+                    params_.work_dir+"/"+boost::lexical_cast<string>(matchings[i].first)+".yml",
                     lc_name,
                     matches,
                     inliers,
@@ -259,7 +386,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
 
       // Loop closure for the previous image?
       validate_valid = compute(img_,
-                               params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first - 1)+".yml",
+                               params_.work_dir+"/"+boost::lexical_cast<string>(matchings[i].first - 1)+".yml",
                                tmp_name,
                                matches_val,
                                inliers_val,
@@ -269,7 +396,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
       {
         // Previous validation does not works, try to validate with the next image
         validate_valid = compute(img_,
-                                 params_.work_dir+"/"+boost::lexical_cast<string>(matchings[best_m].first + 1)+".yml",
+                                 params_.work_dir+"/"+boost::lexical_cast<string>(matchings[i].first + 1)+".yml",
                                  tmp_name,
                                  matches_val,
                                  inliers_val,
@@ -282,22 +409,20 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
       else
         valid = false;
     }
-
-    best_m++;
   }
 
   // Get the image of the loop closure
-  if (valid && best_m < matchings.size())
+  if (valid && valid_idx < matchings.size())
   {
-    lc_img_idx = matchings[best_m].first;
-    lc_candidate_positions_.push_back(best_m);
+    lc_img_id = matchings[valid_idx].first;
+    lc_candidate_positions_.push_back(valid_idx);
 
     // Log
     if(params_.verbose)
       ROS_INFO_STREAM("[libhaloc:] LC between nodes " <<
                       img_.getName() << " and " << lc_name <<
                       " (matches: " << matches << "; inliers: " <<
-                      inliers << "; Position: " << best_m << "/" <<
+                      inliers << "; Position: " << valid_idx << "/" <<
                       params_.n_candidates << ").");
   }
   else
@@ -324,9 +449,9 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_idx, string& lc_name, tf::Tr
   * \param Return the number of inliers found.
   * \param Return the transform between nodes if loop closure is valid.
   */
-bool haloc::LoopClosure::getLoopClosureById(string image_id_ref,
-                                            string image_id_cur,
-                                            tf::Transform& trans)
+bool haloc::LoopClosure::getLoopClosure(string image_id_ref,
+                                        string image_id_cur,
+                                        tf::Transform& trans)
 {
   // Read the data for image_id_1
   FileStorage fs;

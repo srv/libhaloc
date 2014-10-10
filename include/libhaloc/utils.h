@@ -25,9 +25,10 @@ public:
     * \param key_points is the pointer for the resulting image key_points
     * \param type descriptor type (see opencv docs)
     */
-  static void keypointDetector( const Mat& image,
-                                vector<KeyPoint>& key_points,
-                                string type)
+  static void keypointDetector(const Mat& image,
+                               vector<KeyPoint>& key_points,
+                               string type,
+                               int max_kp = -1)
   {
     // Check Opponent color space descriptors
     size_t pos = 0;
@@ -47,6 +48,16 @@ public:
     catch (Exception& e)
     {
       ROS_WARN("[StereoSlam:] cv_detector exception: %s", e.what());
+    }
+
+    if (max_kp != -1 && key_points.size() > max_kp)
+    {
+      // Sort descriptors by response
+      sort(key_points.begin(), key_points.end(), sortByResponse);
+
+      // Limit the number of descriptors
+      vector<KeyPoint> output(key_points.begin(), key_points.begin()+max_kp);
+      key_points = output;
     }
   }
 
@@ -233,6 +244,26 @@ public:
   static bool sortByMatching(const pair<int, float> d1, const pair<int, float> d2)
   {
     return (d1.second < d2.second);
+  }
+
+  /** \brief Sort 2 matchings by probability
+    * @return true if probability 1 is greater than probability 2
+    * \param probability 1
+    * \param probability 2
+    */
+  static bool sortByProbability(const pair<int, float> p1, const pair<int, float> p2)
+  {
+    return (p1.second > p2.second);
+  }
+
+  /** \brief Sort 2 keypoints by response
+    * @return true if response of kp 1 is smaller than response of 2
+    * \param Keypoint 1
+    * \param Keypoint 2
+    */
+  static bool sortByResponse(const KeyPoint kp1, const KeyPoint kp2)
+  {
+    return (kp1.response > kp2.response);
   }
 
   /** \brief compose the transformation matrix using 2 cv::Mat as inputs:
