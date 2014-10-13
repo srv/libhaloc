@@ -317,16 +317,14 @@ class EvaluationNode
 
         // Log
         ros::WallDuration bow_time = ros::WallTime::now() - bow_start;
-        cout << "FABMAP [ ";
+        cout << "FABMAP IMAGES [ ";
         for (int i=0; i<matched_to_img_seq.size();i++)
           cout << matched_to_img_seq[i] << " ";
         cout << "]   \t \t \t"  << bow_time.toSec() << " sec." << endl;
-        /*
-        cout << "[ ";
+        cout << "FABMAP PROB [ ";
         for (int i=0; i<matched_to_img_match.size();i++)
           cout << matched_to_img_match[i] << " ";
         cout << "]" << endl;
-        */
 
 
 

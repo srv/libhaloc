@@ -248,14 +248,25 @@ void haloc::LoopClosure::getCandidates(int image_id, vector< pair<int,float> >& 
   if (max_size > tmp_matchings.size()) max_size = tmp_matchings.size();
   int min_idx = -1;
   int max_idx = -1;
+  int min_hash = -1;
+  int max_hash = -1;
   for (uint i=0; i<max_size; i++)
   {
     if (min_idx < 0 || tmp_matchings[i].first < min_idx) min_idx = tmp_matchings[i].first;
     if (max_idx < 0 || tmp_matchings[i].first > max_idx) max_idx = tmp_matchings[i].first;
+    if (min_hash < 0 || tmp_matchings[i].second < min_hash) min_hash = tmp_matchings[i].second;
+    if (max_hash < 0 || tmp_matchings[i].second > max_hash) max_hash = tmp_matchings[i].second;
+
     matchings.push_back(tmp_matchings[i]);
   }
 
-  // Get minimum and maximum candidate indices to build the probability vector
+  // Normalize the hash values
+  const float min_norm_val = 1.0;
+  const float max_norm_val = 2.0;
+  float m = (min_norm_val - max_norm_val) / (max_hash - min_hash);
+  float n = max_norm_val - m*min_hash;
+
+  // Build the probability vector
   const int space = 10;
   vector<int> prob_idx;
   vector<float> prob_val;
@@ -270,7 +281,7 @@ void haloc::LoopClosure::getCandidates(int image_id, vector< pair<int,float> >& 
     {
       // Create the normal distribution for this matching
       boost::math::normal_distribution<> nd((float)matchings[j].first,2.0);
-      prob += (float)(matchings.size()-j) * boost::math::pdf(nd, (float)cur_idx);
+      prob += (m*matchings[j].second + n) * boost::math::pdf(nd, (float)cur_idx);
     }
     prob_val.push_back(prob);
   }
