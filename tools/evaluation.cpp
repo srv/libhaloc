@@ -56,7 +56,6 @@ class EvaluationNode
       nhp_.param("work_dir", lc_params.work_dir, string(""));
       nhp_.param("desc_type", lc_params.desc_type, string("SIFT"));
       nhp_.param("desc_matching_type", lc_params.desc_matching_type, string("CROSSCHECK"));
-      nhp_.param<int>("max_keypoints", lc_params.max_keypoints, 0.7);
       nhp_.param<double>("desc_thresh_ratio", lc_params.desc_thresh_ratio, 0.7);
       nhp_.param<int>("min_neighbour", lc_params.min_neighbour, 1);
       nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
@@ -225,19 +224,17 @@ class EvaluationNode
           ros::WallDuration haloc_time = ros::WallTime::now() - haloc_start;
           cout << endl << endl;
           ROS_INFO_STREAM("++++++++++++++++++++++ " << image_id << " ++++++++++++++++++++++");
-          cout << "HALOC [ ";
+          cout << "HALOC IMAGES [ ";
           for (int i=0; i<hash_matching.size();i++)
             cout << hash_matching[i].first << " ";
           cout << "]   \t"  << haloc_time.toSec() << " sec." << endl;
           /*
-          cout << "[ ";
+          cout << "HALOC PROB [ ";
           for (int i=0; i<hash_matching.size();i++)
             cout << hash_matching[i].second << " ";
           cout << "]" << endl;
-          ROS_INFO_STREAM("HALOC TIME: " << haloc_time.toSec() << " sec.");
           */
         }
-
 
 
 

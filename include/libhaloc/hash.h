@@ -30,7 +30,7 @@ public:
     int num_proj;                   //!> Number of projections required
 
     // Default values
-    static const int              DEFAULT_PROJ_NUM = 2;
+    static const int              DEFAULT_NUM_PROJ = 2;
   };
 
   // Set the parameter struct

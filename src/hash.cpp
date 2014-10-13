@@ -5,7 +5,7 @@
 /** \brief Parameter constructor. Sets the parameter struct to default values.
   */
 haloc::Hash::Params::Params() :
-  num_proj(DEFAULT_PROJ_NUM)
+  num_proj(DEFAULT_NUM_PROJ)
 {}
 
 /** \brief Hash class constructor

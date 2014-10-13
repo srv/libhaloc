@@ -28,24 +28,21 @@ public:
     Params();
 
     // Class parameters
-    int num_proj;                       //!> Number of projections for image hashing
     string work_dir;                    //!> Directory where the library will save the image informations (must be writable!).
+    int num_proj;                       //!> Number of projections required.
     string desc_type;                   //!> Type of the descriptors (can be SIFT, SURF).
     string desc_matching_type;          //!> Can be "CROSSCHECK" or "RATIO"
     double desc_thresh_ratio;           //!> Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
-    int max_keypoints;                  //!> Maximum number of keypoints per image.
     int epipolar_thresh;                //!> Epipolar threshold.
     int min_neighbour;                  //!> Minimum number of neighbours that will be skipped for the loop closure (typically between 5-20, but depends on the frame rate).
-    int n_candidates;                   //!> Get the n first candidates of the hash matching (typically between 1-5).
+    int n_candidates;                   //!> Get the n first candidates of the hash matching (typically between 5-10).
     int min_matches;                    //!> Minimum number of descriptor matches to consider a matching as possible loop closure (>8).
     int min_inliers;                    //!> Minimum number of inliers to consider a matching as possible loop closure (>8).
     double max_reproj_err;              //!> Maximum reprojection error (stereo only).
-    bool validate;                      //!> True if you want to validate the loop closure (spends more time). Default False.
     bool verbose;                       //!> Set to true to show logs in the screen.
 
     // Default values
     static const int                    DEFAULT_NUM_PROJ = 2;
-    static const int                    DEFAULT_MAX_KEYPOINTS = 250;
     static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
     static const int                    DEFAULT_MIN_NEIGHBOUR = 10;
@@ -53,7 +50,6 @@ public:
     static const int                    DEFAULT_MIN_MATCHES = 20;
     static const int                    DEFAULT_MIN_INLIERS = 12;
     static const double                 DEFAULT_MAX_REPROJ_ERR = 2.0;
-    static const bool                   DEFAULT_VALIDATE = false;
     static const bool                   DEFAULT_VERBOSE = false;
   };
 
@@ -95,12 +91,15 @@ public:
   // Try to find a loop closure for the last saved node.
   bool getLoopClosure(int& lc_img_id,
                       string& lc_name);
+  /* Try to find a loop closure for the last saved node
+     and get the transformation (2D for mono and 3D for stereo).
+   */
   bool getLoopClosure(int& lc_img_id,
-                      string& lc_name,
+                      string& lc_img_name,
                       tf::Transform& trans);
   // Try to find a loop closure given 2 image identifiers
-  bool getLoopClosure(string image_id_ref,
-                      string image_id_cur,
+  bool getLoopClosure(string image_id_a,
+                      string image_id_b,
                       tf::Transform& trans);
 
 private:
@@ -108,7 +107,7 @@ private:
   // Compute the loop closure
   bool compute(Image ref_image,
                string cur_filename,
-               string &lc_name,
+               string &lc_img_name,
                int &matches,
                int &inliers,
                tf::Transform& trans);

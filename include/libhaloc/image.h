@@ -74,10 +74,8 @@ public:
 private:
 
   Params params_;                       //!> Stores parameters
-
   image_geometry::StereoCameraModel
     stereo_camera_model_;               //!> Object to save the stereo camera model.
-
   vector<Point2f> kp_;                  //!> Unfiltered keypoints of the images.
   Mat desc_;                            //!> Unfiltered descriptors of the images.
   vector<Point3f> points_3d_;           //!> 3D points of the stereo correspondences.

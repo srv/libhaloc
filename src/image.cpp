@@ -53,24 +53,15 @@ bool haloc::Image::setMono(const Mat& img, string name)
   name_ = name;
 
   // Extract keypoints
-  kp_.clear();
-  desc_.release();
   vector<KeyPoint> kp;
   haloc::Utils::keypointDetector(img, kp, params_.desc_type);
 
-  /*
-  // Check if image is descriptive enough
-  if (kp.size() < params_.max_keypoints)
-  {
-    ROS_WARN("[Haloc:] Image not descriptive enough. If you see many warnings like this decrease the max_keypoint parameter.");
-    return false;
-  }
-  */
-
   // Extract descriptors
+  desc_.release();
   haloc::Utils::descriptorExtraction(img, kp, desc_, params_.desc_type);
 
-  // Convert
+  // Convert kp
+  kp_.clear();
   for(int i=0; i<kp.size(); i++)
     kp_.push_back(kp[i].pt);
 
@@ -87,29 +78,19 @@ bool haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
   name_ = name;
 
   // Extract keypoints (left)
-  kp_.clear();
-  desc_.release();
   vector<KeyPoint> kp_l;
   haloc::Utils::keypointDetector(img_l, kp_l, params_.desc_type);
 
-  /*
-  // Check if image is descriptive enough (only left is needed for loop closing)
-  if (kp_l.size() < params_.max_keypoints)
-  {
-    ROS_WARN("[Haloc:] Image not descriptive enough. If you see many warnings like this decrease the max_keypoint parameter.");
-    return false;
-  }
-  */
-
   // Extract descriptors (left)
-  haloc::Utils::descriptorExtraction(img_l, kp_l, desc_, params_.desc_type);
+  Mat desc_l;
+  haloc::Utils::descriptorExtraction(img_l, kp_l, desc_l, params_.desc_type);
 
   // Extract keypoints (right)
-  Mat desc_r;
   vector<KeyPoint> kp_r;
   haloc::Utils::keypointDetector(img_r, kp_r, params_.desc_type);
 
   // Extract descriptors (right)
+  Mat desc_r;
   haloc::Utils::descriptorExtraction(img_r, kp_r, desc_r, params_.desc_type);
 
   // Find matches between left and right images
@@ -118,13 +99,13 @@ bool haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
 
   if(params_.desc_matching_type == "CROSSCHECK")
   {
-    haloc::Utils::crossCheckThresholdMatching(desc_,
+    haloc::Utils::crossCheckThresholdMatching(desc_l,
         desc_r, params_.desc_thresh_ratio, match_mask, matches);
   }
   else if (params_.desc_matching_type == "RATIO")
   {
-    haloc::Utils::ratioMatching(desc_,
-        desc_r, params_.desc_thresh_ratio, matches);
+    haloc::Utils::ratioMatching(desc_l,
+        desc_r, params_.desc_thresh_ratio, match_mask, matches);
   }
   else
   {
@@ -153,14 +134,19 @@ bool haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
                                     kp_r[index_right].pt,
                                     world_point);
     matched_kp_l.push_back(kp_l[index_left]);
-    matched_desc_l.push_back(desc_.row(index_left));
+    matched_desc_l.push_back(desc_l.row(index_left));
     matched_3d_points.push_back(world_point);
   }
 
-  // Save properties
+  // Save descriptors
+  desc_ = matched_desc_l;
+
+  // Convert keypoints
+  kp_.clear();
   for(int i=0; i<matched_kp_l.size(); i++)
     kp_.push_back(matched_kp_l[i].pt);
-  desc_ = matched_desc_l;
+
+  // Save 3D
   points_3d_ = matched_3d_points;
 
   return true;
