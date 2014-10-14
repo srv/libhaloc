@@ -228,12 +228,10 @@ class EvaluationNode
           for (int i=0; i<hash_matching.size();i++)
             cout << hash_matching[i].first << " ";
           cout << "]   \t"  << haloc_time.toSec() << " sec." << endl;
-          /*
           cout << "HALOC PROB [ ";
           for (int i=0; i<hash_matching.size();i++)
-            cout << hash_matching[i].second << " ";
+            cout << round(hash_matching[i].second*100)/100 << " ";
           cout << "]" << endl;
-          */
         }
 
 

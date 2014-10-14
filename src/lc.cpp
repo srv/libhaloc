@@ -227,7 +227,6 @@ void haloc::LoopClosure::getCandidates(int image_id,
   vector< pair<int,float> > tmp_matchings;
   for (uint i=0; i<hash_table_.size()-params_.min_neighbour-1; i++)
   {
-
     // Do not compute the hash matching with itself
     if (i == image_id) continue;
 
@@ -277,8 +276,13 @@ void haloc::LoopClosure::getCandidates(int image_id,
     for (uint j=0; j<matchings.size(); j++)
     {
       // Create the normal distribution for this matching
-      boost::math::normal_distribution<> nd((float)matchings[j].first,2.0);
-      prob += (m*matchings[j].second + n) * boost::math::pdf(nd, (float)cur_idx);
+      boost::math::normal_distribution<> nd((float)matchings[j].first, 2.0);
+
+      // Sanity check
+      if (!isfinite(m))
+        prob += min_norm_val * boost::math::pdf(nd, (float)cur_idx);
+      else
+        prob += (m*matchings[j].second + n) * boost::math::pdf(nd, (float)cur_idx);
     }
     prob_val.push_back(prob);
   }
@@ -309,7 +313,7 @@ void haloc::LoopClosure::getCandidates(int image_id,
     matchings_prob.push_back(prev_prob + cur_prob);
   }
 
-  // Make the probability vector unitary: x^ = x/|x|
+  // Make the probability of sum = 1
   float x_norm = 0.0;
   for (uint i=0; i<matchings_prob.size(); i++)
     x_norm += fabs(matchings_prob[i]);

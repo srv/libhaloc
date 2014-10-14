@@ -90,7 +90,7 @@ public:
 
   // Try to find a loop closure for the last saved node.
   bool getLoopClosure(int& lc_img_id,
-                      string& lc_name);
+                      string& lc_img_name);
   /* Try to find a loop closure for the last saved node
      and get the transformation (2D for mono and 3D for stereo).
    */
