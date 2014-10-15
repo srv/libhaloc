@@ -35,7 +35,8 @@ public:
     double desc_thresh_ratio;           //!> Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
     int epipolar_thresh;                //!> Epipolar threshold.
     int min_neighbour;                  //!> Minimum number of neighbours that will be skipped for the loop closure (typically between 5-20, but depends on the frame rate).
-    int n_candidates;                   //!> Get the n first candidates of the hash matching (typically between 5-10).
+    int n_candidates;                   //!> Get the n first candidates of the hash matching (typically between 2-10).
+    int group_range;                    //!> Maximum difference between images to be considered of the same group (typically between 5-10).
     int min_matches;                    //!> Minimum number of descriptor matches to consider a matching as possible loop closure (>8).
     int min_inliers;                    //!> Minimum number of inliers to consider a matching as possible loop closure (>8).
     double max_reproj_err;              //!> Maximum reprojection error (stereo only).
@@ -47,6 +48,7 @@ public:
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
     static const int                    DEFAULT_MIN_NEIGHBOUR = 10;
     static const int                    DEFAULT_N_CANDIDATES = 2;
+    static const int                    DEFAULT_GROUP_RANGE = 5;
     static const int                    DEFAULT_MIN_MATCHES = 20;
     static const int                    DEFAULT_MIN_INLIERS = 12;
     static const double                 DEFAULT_MAX_REPROJ_ERR = 2.0;
@@ -82,11 +84,11 @@ public:
                string name);
 
   // Retrieve the candidates to close loop with the last saved node.
-  void getCandidates(vector< pair<int,float> >& matchings);
+  void getCandidates(vector< pair<int,float> >& candidates);
 
   // Retrieve the candidates to close loop with the specified node.
   void getCandidates(int image_id,
-                     vector< pair<int,float> >& matchings);
+                     vector< pair<int,float> >& candidates);
 
   // Try to find a loop closure for the last saved node.
   bool getLoopClosure(int& lc_img_id,
@@ -112,6 +114,25 @@ private:
                int &inliers,
                tf::Transform& trans);
 
+  // Get the best matchings given an image id
+  void getBestMatchings(int image_id,
+                        int best_n,
+                        vector< pair<int,float> > &best_matchings);
+
+  // Build the likelihood vector
+  void buildLikelihoodVector(vector< pair<int,float> > hash_matchings,
+                             vector< pair<int,float> > &likelihood);
+
+  // Compute the likelihood for every matching
+  void getMatchingsLikelihood(vector< pair<int,float> > matchings,
+                              vector<float> &matchings_likelihood,
+                              vector< pair<int,float> > cur_likelihood,
+                              vector< pair<int,float> > prev_likelihood);
+
+  // Group similar images
+  void groupSimilarImages(vector< pair<int,float> > matchings,
+                          vector< vector<int> > &groups);
+
   // Properties
   Params params_;                       //!> Stores parameters
   Image img_;                           //!> Image object
@@ -120,8 +141,7 @@ private:
   Mat camera_matrix_;                   //!> Used to save the camera matrix
   vector< pair<int, vector<float> > > hash_table_;  //!> Hash table
   vector<int> lc_candidate_positions_;  //!> Loop closure candidate positions
-  vector<int> prob_idx_;                //!> Image indices of probability vector
-  vector<float> prob_val_;              //!> Probability vector
+  vector< pair<int,float> > prev_likelihood_; //!> Stores the previous likelihood vector
 
 };
 

@@ -1,3 +1,4 @@
+#include <ros/ros.h>
 #include "libhaloc/hash.h"
 #include <opencv2/core/eigen.hpp>
 
@@ -53,7 +54,7 @@ void haloc::Hash::init(Mat desc, bool proj_orthogonal)
   */
 vector<float> haloc::Hash::getHash(Mat desc)
 {
-  // initialize the histogram with 0's
+  // Initialize the histogram with 0's
   vector<float> hash(h_size_, 0.0);
 
   // Sanity check
@@ -67,9 +68,8 @@ vector<float> haloc::Hash::getHash(Mat desc)
     {
       float desc_sum = 0.0;
       for (uint m=0; m<desc.rows; m++)
-      {
         desc_sum += r_[i][m]*desc.at<float>(m, n);
-      }
+
       hash[k] = desc_sum/(float)desc.rows;
       k++;
     }

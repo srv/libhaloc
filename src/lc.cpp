@@ -24,6 +24,7 @@ haloc::LoopClosure::Params::Params() :
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH),
   min_neighbour(DEFAULT_MIN_NEIGHBOUR),
   n_candidates(DEFAULT_N_CANDIDATES),
+  group_range(DEFAULT_GROUP_RANGE),
   min_matches(DEFAULT_MIN_MATCHES),
   min_inliers(DEFAULT_MIN_INLIERS),
   max_reproj_err(DEFAULT_MAX_REPROJ_ERR),
@@ -50,6 +51,7 @@ void haloc::LoopClosure::setParams(const Params& params)
   cout << "  epipolar_thresh    = " << params_.epipolar_thresh << endl;
   cout << "  min_neighbour      = " << params_.min_neighbour << endl;
   cout << "  n_candidates       = " << params_.n_candidates << endl;
+  cout << "  group_range        = " << params_.group_range << endl;
   cout << "  min_matches        = " << params_.min_matches << endl;
   cout << "  min_inliers        = " << params_.min_inliers << endl;
   cout << "  max_reproj_err     = " << params_.max_reproj_err << endl;
@@ -204,133 +206,78 @@ bool haloc::LoopClosure::setNode(Mat img_l,
 }
 
 /** \brief Get the best n_candidates to close loop with the last image.
-  * @return a hash matching vector containing the best image matchings and its likelihood.
+  * @return a hash matching vector containing the best image candidates and its likelihood.
   */
-void haloc::LoopClosure::getCandidates(vector< pair<int,float> >& matchings)
+void haloc::LoopClosure::getCandidates(vector< pair<int,float> >& candidates)
 {
-  getCandidates(img_id_-1, matchings);
+  getCandidates(img_id_-1, candidates);
 }
 
 /** \brief Get the best n_candidates to close loop with the image specified by id.
+  * @return a hash matching vector containing the best image candidates and its likelihood.
   * \param image id.
   */
 void haloc::LoopClosure::getCandidates(int image_id,
-                                       vector< pair<int,float> >& matchings)
+                                       vector< pair<int,float> >& candidates)
 {
+  // Init
+  candidates.clear();
+
   // Check if enough neighbours
   if ((int)hash_table_.size() <= params_.min_neighbour) return;
 
-  // The query hash
-  vector<float> hash_q = hash_table_[image_id].second;
+  // Query matching versus all the hash table
+  vector< pair<int,float> > best_matchings;
+  getBestMatchings(image_id, params_.n_candidates, best_matchings);
 
-  // Loop over all the hashes stored
-  vector< pair<int,float> > tmp_matchings;
-  for (uint i=0; i<hash_table_.size()-params_.min_neighbour-1; i++)
-  {
-    // Do not compute the hash matching with itself
-    if (i == image_id) continue;
+  // Build the likelihood vector
+  vector< pair<int,float> > cur_likelihood;
+  buildLikelihoodVector(best_matchings, cur_likelihood);
 
-    vector<float> hash_t = hash_table_[i].second;
-    float m = hash_.match(hash_q, hash_t);
-    tmp_matchings.push_back(make_pair(hash_table_[i].first, m));
-  }
-
-  // Sort the hash matchings
-  sort(tmp_matchings.begin(), tmp_matchings.end(), haloc::Utils::sortByMatching);
-
-  // Retrieve the first n_candidates
-  matchings.clear();
-  int max_size = params_.n_candidates;
-  if (max_size > tmp_matchings.size()) max_size = tmp_matchings.size();
-  int min_idx = -1;
-  int max_idx = -1;
-  int min_hash = -1;
-  int max_hash = -1;
-  for (uint i=0; i<max_size; i++)
-  {
-    if (min_idx < 0 || tmp_matchings[i].first < min_idx) min_idx = tmp_matchings[i].first;
-    if (max_idx < 0 || tmp_matchings[i].first > max_idx) max_idx = tmp_matchings[i].first;
-    if (min_hash < 0 || tmp_matchings[i].second < min_hash) min_hash = tmp_matchings[i].second;
-    if (max_hash < 0 || tmp_matchings[i].second > max_hash) max_hash = tmp_matchings[i].second;
-
-    matchings.push_back(tmp_matchings[i]);
-  }
-
-  // Normalize the hash values
-  const float min_norm_val = 1.0;
-  const float max_norm_val = 2.0;
-  float m = (min_norm_val - max_norm_val) / (max_hash - min_hash);
-  float n = max_norm_val - m*min_hash;
-
-  // Build the probability vector
-  const int space = 10;
-  vector<int> prob_idx;
-  vector<float> prob_val;
-  for (int i=0; i<=(max_idx-min_idx)+2*space; i++)
-  {
-    int cur_idx = min_idx - space + i;
-    prob_idx.push_back(cur_idx);
-
-    // Compute the probability for every candidate
-    float prob = 0.0;
-    for (uint j=0; j<matchings.size(); j++)
-    {
-      // Create the normal distribution for this matching
-      boost::math::normal_distribution<> nd((float)matchings[j].first, 2.0);
-
-      // Sanity check
-      if (!isfinite(m))
-        prob += min_norm_val * boost::math::pdf(nd, (float)cur_idx);
-      else
-        prob += (m*matchings[j].second + n) * boost::math::pdf(nd, (float)cur_idx);
-    }
-    prob_val.push_back(prob);
-  }
-
-  // Merge current probability with the previous
-  vector<float> matchings_prob;
-  for (uint i=0; i<matchings.size(); i++)
-  {
-    // Find previous value
-    float prev_prob = 0.0;
-    vector<int>::iterator itp = find(prob_idx_.begin(), prob_idx_.end(), matchings[i].first);
-    if (itp != prob_idx_.end())
-    {
-      int idx = distance(prob_idx_.begin(), itp);
-      prev_prob = prob_val_[idx];
-    }
-
-    // Find current value
-    float cur_prob = 0.0;
-    vector<int>::iterator itc = find(prob_idx.begin(), prob_idx.end(), matchings[i].first);
-    if (itc != prob_idx.end())
-    {
-      int idx = distance(prob_idx.begin(), itc);
-      cur_prob = prob_val[idx];
-    }
-
-    // Add and save
-    matchings_prob.push_back(prev_prob + cur_prob);
-  }
-
-  // Make the probability of sum = 1
-  float x_norm = 0.0;
-  for (uint i=0; i<matchings_prob.size(); i++)
-    x_norm += fabs(matchings_prob[i]);
-  for (uint i=0; i<matchings_prob.size(); i++)
-    matchings_prob[i] = matchings_prob[i] / x_norm;
+  // Merge current likelihood with the previous
+  vector<float> matchings_likelihood;
+  getMatchingsLikelihood(best_matchings, matchings_likelihood, cur_likelihood, prev_likelihood_);
 
   // Save for the next execution
-  prob_idx_ = prob_idx;
-  prob_val_ = prob_val;
+  prev_likelihood_ = cur_likelihood;
 
-  // Order matchings by probability
-  vector< pair<int, float> > to_sort;
-  for (uint i=0; i<matchings.size(); i++)
-    to_sort.push_back(make_pair(matchings[i].first, matchings_prob[i]));
+  // Sanity check
+  if (best_matchings.size() < 2) return;
 
-  sort(to_sort.begin(), to_sort.end(), haloc::Utils::sortByProbability);
-  matchings = to_sort;
+  // Group similar images
+  vector< vector<int> > groups;
+  groupSimilarImages(best_matchings, groups);
+
+  // Order matchings by likelihood
+  vector< pair<int, float> > sorted_matchings;
+  for (uint i=0; i<best_matchings.size(); i++)
+    sorted_matchings.push_back(make_pair(best_matchings[i].first, matchings_likelihood[i]));
+  sort(sorted_matchings.begin(), sorted_matchings.end(), haloc::Utils::sortByLikelihood);
+
+  // Build the output
+  for (uint i=0; i<groups.size(); i++)
+  {
+    int group_id = -1;
+    float group_likelihood = 0.0;
+    for (uint j=0; j<groups[i].size(); j++)
+    {
+      // Search this index into the matchings vector
+      for (uint k=0; k<sorted_matchings.size(); k++)
+      {
+        if (groups[i][j] == sorted_matchings[k].first)
+        {
+          if (group_id < 0) group_id = groups[i][j];
+          group_likelihood += sorted_matchings[k].second;
+          break;
+        }
+      }
+    }
+    candidates.push_back(make_pair(group_id, group_likelihood));
+  }
+
+  // Sort candidates by likelihood
+  sort(candidates.begin(), candidates.end(), haloc::Utils::sortByLikelihood);
+
 }
 
 /** \brief Try to find a loop closure between last node and all other nodes.
@@ -579,4 +526,210 @@ bool haloc::LoopClosure::compute(Image ref_image,
 
   // If we arrive here, there is a loop closure.
   return true;
+}
+
+/** \brief Retrieve the best n matchings give a certain image id.
+  * \param Query image id.
+  * \param Number of best matches to retrieve.
+  * \param Stores best n matchings in a vector of pairs <image_id, distance>.
+  */
+void haloc::LoopClosure::getBestMatchings(int image_id,
+                                          int best_n,
+                                          vector< pair<int,float> > &best_matchings)
+{
+  // Query hash
+  vector<float> hash_q = hash_table_[image_id].second;
+
+  // Loop over all the hashes stored
+  vector< pair<int,float> > all_matchings;
+  for (uint i=0; i<hash_table_.size()-params_.min_neighbour-1; i++)
+  {
+    // Do not compute the hash matching with itself
+    if (i == image_id) continue;
+
+    vector<float> hash_t = hash_table_[i].second;
+    float m = hash_.match(hash_q, hash_t);
+    all_matchings.push_back(make_pair(hash_table_[i].first, m));
+  }
+
+  // Sort the hash matchings
+  sort(all_matchings.begin(), all_matchings.end(), haloc::Utils::sortByMatching);
+
+  // Retrieve the best n matches
+  best_matchings.clear();
+  int max_size = best_n;
+  if (max_size > all_matchings.size()) max_size = all_matchings.size();
+  for (uint i=0; i<max_size; i++)
+    best_matchings.push_back(all_matchings[i]);
+}
+
+/** \brief Compute the likelihood vectors given a certain hash matching set.
+  * \param Hash matching vector in the format <image_id, distance>.
+  * \param Stores the likelihood in the format <image_id, probability>.
+  */
+void haloc::LoopClosure::buildLikelihoodVector(vector< pair<int,float> > hash_matchings,
+                                               vector< pair<int,float> > &likelihood)
+{
+  // Init
+  likelihood.clear();
+
+  // Get maximums and minimums of the hash matchings
+  int min_idx = -1;
+  int max_idx = -1;
+  int min_hash = -1;
+  int max_hash = -1;
+  for (uint i=0; i<hash_matchings.size(); i++)
+  {
+    if (min_idx < 0 || hash_matchings[i].first < min_idx) min_idx = hash_matchings[i].first;
+    if (max_idx < 0 || hash_matchings[i].first > max_idx) max_idx = hash_matchings[i].first;
+    if (min_hash < 0 || hash_matchings[i].second < min_hash) min_hash = hash_matchings[i].second;
+    if (max_hash < 0 || hash_matchings[i].second > max_hash) max_hash = hash_matchings[i].second;
+  }
+
+  // Normalize the hash values
+  const float min_norm_val = 1.0;
+  const float max_norm_val = 2.0;
+  float m = (min_norm_val - max_norm_val) / (max_hash - min_hash);
+  float n = max_norm_val - m*min_hash;
+
+  // Build the probability vector
+  int space = params_.group_range;
+  for (int i=0; i<=(max_idx-min_idx)+2*space; i++)
+  {
+    int cur_idx = min_idx - space + i;
+
+    // Compute the probability for every candidate
+    float prob = 0.0;
+    for (uint j=0; j<hash_matchings.size(); j++)
+    {
+      // Create the normal distribution for this matching
+      boost::math::normal_distribution<> nd((float)hash_matchings[j].first, 2.0);
+
+      // Sanity check
+      if (!isfinite(m))
+        prob += min_norm_val * boost::math::pdf(nd, (float)cur_idx);
+      else
+        prob += (m*hash_matchings[j].second + n) * boost::math::pdf(nd, (float)cur_idx);
+    }
+    likelihood.push_back(make_pair(cur_idx,prob));
+  }
+}
+
+/** \brief Given a vector of matches and the current and previous likelihood vectors, returns the
+  * likelihood for these matches.
+  * \param Hash matching vector in the format <image_id, distance>.
+  * \param Stores the likelihood for the given matching vectors
+  * \param Current vector of likelihood in the format <image_id, probability>.
+  * \param Previous vector of likelihood in the format <image_id, probability>.
+  */
+void haloc::LoopClosure::getMatchingsLikelihood(vector< pair<int,float> > matchings,
+                                                vector<float> &matchings_likelihood,
+                                                vector< pair<int,float> > cur_likelihood,
+                                                vector< pair<int,float> > prev_likelihood)
+{
+  // Init
+  matchings_likelihood.clear();
+
+  // Extract the vectors
+  vector<int> cur_idx;
+  for (uint i=0; i<cur_likelihood.size(); i++)
+    cur_idx.push_back(cur_likelihood[i].first);
+
+  vector<int> prev_idx;
+  for (uint i=0; i<prev_likelihood.size(); i++)
+    prev_idx.push_back(prev_likelihood[i].first);
+
+  // For every matching
+  for (uint i=0; i<matchings.size(); i++)
+  {
+    // Find previous value
+    float prev_prob = 0.0;
+    vector<int>::iterator itp = find(prev_idx.begin(), prev_idx.end(), matchings[i].first);
+    if (itp != prev_idx.end())
+    {
+      int idx = distance(prev_idx.begin(), itp);
+      prev_prob = prev_likelihood[idx].second;
+    }
+
+    // Find current value
+    float cur_prob = 0.0;
+    vector<int>::iterator itc = find(cur_idx.begin(), cur_idx.end(), matchings[i].first);
+    if (itc != cur_idx.end())
+    {
+      int idx = distance(cur_idx.begin(), itc);
+      cur_prob = cur_likelihood[idx].second;
+    }
+
+    // Add and save
+    matchings_likelihood.push_back(prev_prob + cur_prob);
+  }
+
+  // Make the probability of sum = 1
+  float x_norm = 0.0;
+  for (uint i=0; i<matchings_likelihood.size(); i++)
+    x_norm += fabs(matchings_likelihood[i]);
+  for (uint i=0; i<matchings_likelihood.size(); i++)
+    matchings_likelihood[i] = matchings_likelihood[i] / x_norm;
+}
+
+/** \brief Group the matchings by images with similar id
+  * \param Hash matching vector in the format <image_id, distance>.
+  * \param Stores groups of images
+  */
+void haloc::LoopClosure::groupSimilarImages(vector< pair<int,float> > matchings,
+                                            vector< vector<int> > &groups)
+{
+  // Init groups vector
+  groups.clear();
+  vector<int> new_group;
+  new_group.push_back(matchings[0].first);
+  groups.push_back(new_group);
+  matchings.erase(matchings.begin());
+
+  bool finish = false;
+  while(!finish)
+  {
+    // Get the last inserted group
+    vector<int> last_group = groups.back();
+
+    // Mean image index
+    int sum = accumulate(last_group.begin(), last_group.end(), 0.0);
+    float mean = (float)sum / (float)last_group.size();
+
+    bool new_insertion = false;
+    for (uint i=0; i<matchings.size(); i++)
+    {
+      if ( abs(mean - (float)matchings[i].first) < params_.group_range )
+      {
+        // Save id
+        last_group.push_back(matchings[i].first);
+
+        // Replace group
+        groups.pop_back();
+        groups.push_back(last_group);
+
+        // Delete from matching list
+        matchings.erase(matchings.begin() + i);
+
+        new_insertion = true;
+        break;
+      }
+    }
+
+    // Finish?
+    if (matchings.size() == 0)
+    {
+      finish = true;
+      continue;
+    }
+
+    // Proceed depending on new insertion or not
+    if (!new_insertion)
+    {
+      new_group.clear();
+      new_group.push_back(matchings[0].first);
+      groups.push_back(new_group);
+      matchings.erase(matchings.begin());
+    }
+  }
 }

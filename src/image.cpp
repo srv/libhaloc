@@ -6,7 +6,6 @@
 haloc::Image::Params::Params() :
   desc_type("SIFT"),
   desc_matching_type("CROSSCHECK"),
-  max_keypoints(DEFAULT_MAX_KEYPOINTS),
   desc_thresh_ratio(DEFAULT_DESC_THRESH_RATIO),
   min_matches(DEFAULT_MIN_MATCHES),
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH)

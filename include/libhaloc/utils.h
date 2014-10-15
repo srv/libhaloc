@@ -232,12 +232,12 @@ public:
     return (d1.second < d2.second);
   }
 
-  /** \brief Sort 2 matchings by probability
-    * @return true if probability 1 is greater than probability 2
-    * \param probability 1
-    * \param probability 2
+  /** \brief Sort 2 matchings by likelihood
+    * @return true if likelihood 1 is greater than likelihood 2
+    * \param likelihood 1
+    * \param likelihood 2
     */
-  static bool sortByProbability(const pair<int, float> p1, const pair<int, float> p2)
+  static bool sortByLikelihood(const pair<int, float> p1, const pair<int, float> p2)
   {
     return (p1.second > p2.second);
   }

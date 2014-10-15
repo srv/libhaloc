@@ -41,7 +41,7 @@ class EvaluationNode
       nhp_.param<int>("max_images", max_images_, 50);
       nhp_.param<double>("cluster_size", cluster_size_, 0.6);
       nhp_.param<double>("lower_information_bound", lower_information_bound_, 0);
-      nhp_.param<int>("min_descriptor_count", min_descriptor_count_, 50);
+      nhp_.param<int>("min_descriptor_count", min_descriptor_count_, 40);
 
       // BoW run parameters
       nhp_.param<int>("max_matches", max_matches_, 0);
@@ -57,10 +57,9 @@ class EvaluationNode
       nhp_.param("desc_type", lc_params.desc_type, string("SIFT"));
       nhp_.param("desc_matching_type", lc_params.desc_matching_type, string("CROSSCHECK"));
       nhp_.param<double>("desc_thresh_ratio", lc_params.desc_thresh_ratio, 0.7);
+      nhp_.param<int>("num_proj", lc_params.num_proj, 2);
       nhp_.param<int>("min_neighbour", lc_params.min_neighbour, 1);
       nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
-      nhp_.param<int>("min_matches", lc_params.min_matches, 15);
-      nhp_.param<int>("min_inliers", lc_params.min_inliers, 12);
       lc_.setParams(lc_params);
     }
 
@@ -212,27 +211,27 @@ class EvaluationNode
         Mat img = imread(path, CV_LOAD_IMAGE_COLOR);
         image_id++;
 
+        cout << endl << endl;
+        ROS_INFO_STREAM("++++++++++++++++++++++ " << image_id << " ++++++++++++++++++++++");
+
 
 
 
         // HALOC ---------------------------------------
+
         ros::WallTime haloc_start = ros::WallTime::now();
-        bool valid = lc_.setNode(img, filename);
-        if (valid) {
-          vector< pair<int,float> > hash_matching;
-          lc_.getCandidates(hash_matching);
-          ros::WallDuration haloc_time = ros::WallTime::now() - haloc_start;
-          cout << endl << endl;
-          ROS_INFO_STREAM("++++++++++++++++++++++ " << image_id << " ++++++++++++++++++++++");
-          cout << "HALOC IMAGES [ ";
-          for (int i=0; i<hash_matching.size();i++)
-            cout << hash_matching[i].first << " ";
-          cout << "]   \t"  << haloc_time.toSec() << " sec." << endl;
-          cout << "HALOC PROB [ ";
-          for (int i=0; i<hash_matching.size();i++)
-            cout << round(hash_matching[i].second*100)/100 << " ";
-          cout << "]" << endl;
-        }
+        lc_.setNode(img, filename);
+        vector< pair<int,float> > hash_matching;
+        lc_.getCandidates(hash_matching);
+        ros::WallDuration haloc_time = ros::WallTime::now() - haloc_start;
+        cout << "HALOC IMAGES [ ";
+        for (int i=0; i<hash_matching.size();i++)
+          cout << hash_matching[i].first << " ";
+        cout << "]   \t"  << haloc_time.toSec() << " sec." << endl;
+        cout << "HALOC PROB [ ";
+        for (int i=0; i<hash_matching.size();i++)
+          cout << round(hash_matching[i].second*100)/100 << " ";
+        cout << "]" << endl;
 
 
 
@@ -337,7 +336,6 @@ class EvaluationNode
           }
           cout << "]" << endl;
         }
-
 
         // Next directory entry
         it++;
