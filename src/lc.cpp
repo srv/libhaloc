@@ -335,10 +335,8 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
         best_lc_found = lc_img_name;
       }
     }
-
     if (valid) break;
   }
-
 
   // Get the image of the loop closure
   if (valid)

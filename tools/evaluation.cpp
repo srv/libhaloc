@@ -22,6 +22,7 @@ class EvaluationNode
     string training_dir_;
     string running_dir_;
     haloc::LoopClosure lc_;
+    string output_file_;
 
     // Class constructor
     EvaluationNode() : nhp_("~") {}
@@ -38,7 +39,7 @@ class EvaluationNode
       nhp_.param<string>("gt_file", gt_file_, std::string(""));
 
       // BoW trainer parameters
-      nhp_.param<int>("max_images", max_images_, 50);
+      nhp_.param<int>("max_images", max_images_, 90);
       nhp_.param<double>("cluster_size", cluster_size_, 0.6);
       nhp_.param<double>("lower_information_bound", lower_information_bound_, 0);
       nhp_.param<int>("min_descriptor_count", min_descriptor_count_, 40);
@@ -61,6 +62,10 @@ class EvaluationNode
       nhp_.param<int>("min_neighbour", lc_params.min_neighbour, 1);
       nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
       lc_.setParams(lc_params);
+
+      // Output file
+      output_file_ = lc_params.work_dir + "/output.txt";
+      remove(output_file_.c_str());
     }
 
     // Initialize the node
@@ -324,6 +329,7 @@ class EvaluationNode
 
         // GROUND TRUTH ----------------------------------
 
+        vector<int> current_gt;
         if (ground_truth.size() > image_id)
         {
           // Get the current row
@@ -332,9 +338,65 @@ class EvaluationNode
           for (uint i=0; i<gt_row.size(); i++)
           {
             if (gt_row[i] == 1)
+            {
+              current_gt.push_back(i);
               cout << i << " ";
+            }
           }
           cout << "]" << endl;
+        }
+
+
+        // Check if openfabmap and haloc have detected a correct loop
+        int haloc_idx = -1;
+        int openfabmap_idx = -1;
+        bool haloc_valid = false;
+        bool openfabmap_valid = false;
+        for (uint i=0; i<current_gt.size(); i++)
+        {
+          // Exit
+          if (haloc_valid && openfabmap_valid) break;
+
+          // HALOC
+          if (!haloc_valid)
+          {
+            for (uint j=0; j<hash_matching.size(); j++)
+            {
+              if (abs(hash_matching[j].first - current_gt[i]) < 10)
+              {
+                haloc_idx = j;
+                haloc_valid = true;
+                break;
+              }
+            }
+          }
+
+          // OPENFABMAP
+          if (!openfabmap_valid)
+          {
+            for (uint j=0; j<matched_to_img_seq.size(); j++)
+            {
+              if (abs(matched_to_img_seq[j] - current_gt[i]) < 10)
+              {
+                openfabmap_idx = j;
+                openfabmap_valid = true;
+                break;
+              }
+            }
+          }
+        }
+
+        // If valid loop closure found, save the current index into a file
+        if (haloc_valid && openfabmap_valid)
+        {
+          // Open to append
+          fstream f_output(output_file_.c_str(), ios::out | ios::trunc);
+          f_output << fixed << setprecision(9) <<
+                haloc_idx  << "," <<
+                openfabmap_idx << "," <<
+                haloc_time.toSec() << "," <<
+                bow_time.toSec() <<  endl;
+          f_output.close();
         }
 
         // Next directory entry
