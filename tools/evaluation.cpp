@@ -40,7 +40,7 @@ class EvaluationNode
 
       // BoW trainer parameters
       nhp_.param<int>("max_images", max_images_, 90);
-      nhp_.param<double>("cluster_size", cluster_size_, 0.6);
+      nhp_.param<double>("cluster_size", cluster_size_, 0.4);
       nhp_.param<double>("lower_information_bound", lower_information_bound_, 0);
       nhp_.param<int>("min_descriptor_count", min_descriptor_count_, 40);
 
@@ -390,7 +390,7 @@ class EvaluationNode
         if (haloc_valid && openfabmap_valid)
         {
           // Open to append
-          fstream f_output(output_file_.c_str(), ios::out | ios::trunc);
+          fstream f_output(output_file_.c_str(), ios::out | ios::app);
           f_output << fixed << setprecision(9) <<
                 haloc_idx  << "," <<
                 openfabmap_idx << "," <<
