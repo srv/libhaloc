@@ -12,7 +12,6 @@
 	<arg name="n_candidates" />
 	<arg name="min_matches" />
 	<arg name="min_inliers" />
-	<arg name="validate" />
 	<arg name="gt_tolerance" />
 
 	<node pkg="libhaloc" type="mono" name="remote_$(arg tmp_id)" output="screen">
@@ -33,7 +32,6 @@
 		<param name="n_candidates" value="$(arg n_candidates)" />
 		<param name="min_matches" value="$(arg min_matches)" />
 		<param name="min_inliers" value="$(arg min_inliers)" />
-		<param name="validate" value="$(arg validate)" />
 		<param name="gt_tolerance" value="$(arg gt_tolerance)" />
 
 	</node>
