@@ -21,8 +21,7 @@ bool start_node(libhaloc::RemoteExecution::Request  &req,
 							req.min_neighbour + " n_candidates:=" +
 							req.n_candidates + " min_matches:=" +
 							req.min_matches + " min_inliers:=" +
-							req.min_inliers + " validate:=" +
-							req.validate + " gt_tolerance:=" +
+							req.min_inliers + " gt_tolerance:=" +
 							req.gt_tolerance + " &";
 		system(cmd.c_str());
 

@@ -200,7 +200,6 @@ class Mono
                 min_matches_ << "," <<
                 min_inliers_ << "," <<
                 epipolar_thresh_ << "," <<
-                validate_ << "," <<
                 gt_tolerance_ << "," <<
                 total_lc << "," <<
                 found_lc << "," <<
@@ -223,7 +222,6 @@ class Mono
     // Properties
     string tmp_id_, img_dir_, desc_type_, desc_matching_type_, output_path_, gt_file_;
     double desc_thresh_ratio_, epipolar_thresh_;
-    bool validate_;
     int min_neighbour_, n_candidates_, min_matches_, min_inliers_, gt_tolerance_;
     haloc::LoopClosure lc_;
 
@@ -243,7 +241,6 @@ class Mono
       nh_private_.getParam("min_matches", min_matches_);
       nh_private_.getParam("min_inliers", min_inliers_);
       nh_private_.getParam("epipolar_thresh", epipolar_thresh_);
-      nh_private_.param("validate", validate_, false);
       nh_private_.getParam("gt_tolerance", gt_tolerance_);
 
       // Log
@@ -257,7 +254,6 @@ class Mono
       cout << "  min_matches       = " << min_matches_ << endl;
       cout << "  min_inliers       = " << min_inliers_ << endl;
       cout << "  epipolar_thresh   = " << epipolar_thresh_ << endl;
-      cout << "  validate          = " << validate_ << endl;
       cout << "  gt_tolerance      = " << gt_tolerance_ << endl;
 
       // Files path sanity check

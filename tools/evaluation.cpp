@@ -197,11 +197,8 @@ class EvaluationNode
       vector<int> to_img_seq;
 
       // Iterate over all images
-      //int j=0;
       while (it!=v.end())
       {
-        //j++;
-        //if (j==40) break;
 
         if (fs::is_directory(*it))
         {
@@ -299,7 +296,7 @@ class EvaluationNode
               // Additionally if required,
               // --do NOT return matches below self matches OR new places ('-1')
               if ((match_img_seq >= image_id-self_match_window_ && disable_self_match_) || (match_img_seq == -1 && disable_unknown_match_))
-                break;
+                continue;
 
               // Add the Image seq number and its match likelihood
               matched_to_img_seq.push_back(match_img_seq);
@@ -387,7 +384,7 @@ class EvaluationNode
         }
 
         // If valid loop closure found, save the current index into a file
-        if (haloc_valid && openfabmap_valid)
+        if (haloc_valid)
         {
           // Open to append
           fstream f_output(output_file_.c_str(), ios::out | ios::app);
