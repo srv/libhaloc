@@ -15,7 +15,6 @@
 		<param name="n_candidates" value="10" />
 		<param name="min_matches" value="10" />
 		<param name="min_inliers" value="10" />
-		<param name="validate" value="true" />
 		<param name="gt_tolerance" value="10" />
 
 	</node>

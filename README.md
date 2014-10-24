@@ -26,7 +26,6 @@ params.desc_type = whatever;
 .
 .
 .
-params.validate = whatever;
 haloc_obj.setParams(params);
 ```
 
