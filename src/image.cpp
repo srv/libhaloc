@@ -24,14 +24,14 @@ void haloc::Image::setParams(const Params& params)
 }
 
 // Access specifiers
+int haloc::Image::getId() { return id_; }
+void haloc::Image::setId(int id) { id_ = id; }
 vector<Point2f> haloc::Image::getKp() { return kp_; }
 void haloc::Image::setKp(vector<Point2f> kp) { kp_ = kp; }
 Mat haloc::Image::getDesc() { return desc_; }
 void haloc::Image::setDesc(Mat desc) { desc_ = desc; }
 vector<Point3f> haloc::Image::get3D() { return points_3d_; };
 void haloc::Image::set3D(vector<Point3f> points_3d) { points_3d_ = points_3d; };
-string haloc::Image::getName() { return name_; };
-void haloc::Image::setName(string name) { name_ = name; };
 
 
 /** \brief Sets the stereo camera model for the class
@@ -43,13 +43,12 @@ void haloc::Image::setCameraModel(image_geometry::StereoCameraModel stereo_camer
 }
 
 /** \brief Compute the keypoints and descriptors for one image (mono)
+  * \param Image identifier
   * \param cvMat image
-  * \param Human readable name for this node.
   */
-bool haloc::Image::setMono(const Mat& img, string name)
+void haloc::Image::setMono(int id, const Mat& img)
 {
-  // Identify
-  name_ = name;
+  id_ = id;
 
   // Extract keypoints
   vector<KeyPoint> kp;
@@ -63,18 +62,16 @@ bool haloc::Image::setMono(const Mat& img, string name)
   kp_.clear();
   for(int i=0; i<kp.size(); i++)
     kp_.push_back(kp[i].pt);
-
-  return true;
 }
 
 /** \brief Compute the keypoints and descriptors for two images (stereo)
+  * \param Image identifier
   * \param cvMat image for left frame
   * \param cvMat image for right frame
   */
-bool haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
+void haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
 {
-  // Identify
-  name_ = name;
+  id_ = id;
 
   // Extract keypoints (left)
   vector<KeyPoint> kp_l;
@@ -147,6 +144,4 @@ bool haloc::Image::setStereo(const Mat& img_l, const Mat& img_r, string name)
 
   // Save 3D
   points_3d_ = matched_3d_points;
-
-  return true;
 }

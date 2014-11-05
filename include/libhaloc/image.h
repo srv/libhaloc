@@ -45,39 +45,39 @@ public:
   inline Params params() const { return params_; }
 
   // Compute the keypoints and descriptors for one image (mono)
-  bool setMono(const Mat& img, string name);
+  void setMono(int id, const Mat& img);
 
-  // Compute the keypoints and descriptors for two images (stereo)
-  bool setStereo(const Mat& img_l, const Mat& img_r, string name);
+  // Compute the keypoints, descriptors and 3d points for two images (stereo)
+  void setStereo(int id, const Mat& img_l, const Mat& img_r);
 
   // Save the camera model
   void setCameraModel(image_geometry::StereoCameraModel stereo_camera_model);
 
+  // Get/set the id
+  int getId();
+  void setId(int id);
+
   // Get/set the keypoints of the image (left for stereo)
   vector<Point2f> getKp();
-  void setKp(vector<Point2f>);
+  void setKp(vector<Point2f> kp);
 
   // Get/set the descriptors of the image (left for stereo)
   Mat getDesc();
-  void setDesc(Mat);
+  void setDesc(Mat desc);
 
   // Get/set the 3D points
   vector<Point3f> get3D();
-  void set3D(vector<Point3f>);
-
-  // Get/set the name
-  string getName();
-  void setName(string);
+  void set3D(vector<Point3f> p3d);
 
 private:
 
   Params params_;                       //!> Stores parameters
   image_geometry::StereoCameraModel
     stereo_camera_model_;               //!> Object to save the stereo camera model.
+  int id_;                              //!> The current id for this image.
   vector<Point2f> kp_;                  //!> Unfiltered keypoints of the images.
   Mat desc_;                            //!> Unfiltered descriptors of the images.
   vector<Point3f> points_3d_;           //!> 3D points of the stereo correspondences.
-  string name_;                         //!> Name identifying the current image
 };
 
 } // namespace

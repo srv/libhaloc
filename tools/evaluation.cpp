@@ -220,10 +220,9 @@ class EvaluationNode
 
 
         // HALOC ---------------------------------------
-
-        ros::WallTime haloc_start = ros::WallTime::now();
-        lc_.setNode(img, filename);
+        lc_.setNode(img);
         vector< pair<int,float> > hash_matching;
+        ros::WallTime haloc_start = ros::WallTime::now();
         lc_.getCandidates(hash_matching);
         ros::WallDuration haloc_time = ros::WallTime::now() - haloc_start;
         cout << "HALOC IMAGES [ ";
@@ -239,7 +238,6 @@ class EvaluationNode
 
         // OPENFABMAP ----------------------------------
 
-        ros::WallTime bow_start = ros::WallTime::now();
         Mat bow;
         vector<KeyPoint> kpts;
         detector_->detect(img, kpts);
@@ -249,6 +247,7 @@ class EvaluationNode
         vector<double> matched_to_img_match;
 
         // Check if the frame could be described
+        ros::WallTime bow_start = ros::WallTime::now();
         if (!bow.empty() && kpts.size() > min_descriptor_count_)
         {
           // IF NOT the first frame processed

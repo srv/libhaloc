@@ -116,12 +116,11 @@ class Mono
           Mat img = imread(img_dir_+"/"+cur_filename, CV_LOAD_IMAGE_COLOR);
 
           // Set the new image
-          lc_.setNode(img, cur_filename);
+          lc_.setNode(img);
 
           // Get the loop closure (if any)
           int img_lc = -1;
-          string lc_filename = "";
-          bool valid = lc_.getLoopClosure(img_lc, lc_filename);
+          bool valid = lc_.getLoopClosure(img_lc);
 
           // Check ground truth
           int tp = 0;
@@ -155,10 +154,10 @@ class Mono
           img_i++;
 
           // Log
-          ROS_INFO_STREAM( cur_filename << " cl with " << lc_filename << ": " << valid << ": " << tp << "|" << fa);
+          ROS_INFO_STREAM( cur_filename << " cl with " << img_lc << ": " << valid << ": " << tp << "|" << fa);
           fstream f_log(log_file_str.c_str(), ios::out | ios::app);
           f_log << cur_filename << "," <<
-                   lc_filename << "," <<
+                   img_lc << "," <<
                    img_lc << "," <<
                    valid << "," <<
                    tp << "," <<

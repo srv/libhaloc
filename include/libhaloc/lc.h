@@ -72,16 +72,11 @@ public:
                       Mat camera_matrix);
 
   // Compute kp, desc and hash for one image (mono version).
-  bool setNode(Mat img);
-  bool setNode(Mat img,
-               string name);
+  int setNode(Mat img);
 
   // Compute kp, desc and hash for two images (stereo version).
-  bool setNode(Mat img_l,
-               Mat img_r);
-  bool setNode(Mat img_l,
-               Mat img_r,
-               string name);
+  int setNode(Mat img_l,
+              Mat img_r);
 
   // Retrieve the candidates to close loop with the last saved node.
   void getCandidates(vector< pair<int,float> >& candidates);
@@ -91,13 +86,11 @@ public:
                      vector< pair<int,float> >& candidates);
 
   // Try to find a loop closure for the last saved node.
-  bool getLoopClosure(int& lc_img_id,
-                      string& lc_img_name);
+  bool getLoopClosure(int& lc_img_id);
   /* Try to find a loop closure for the last saved node
      and get the transformation (2D for mono and 3D for stereo).
    */
   bool getLoopClosure(int& lc_img_id,
-                      string& lc_img_name,
                       tf::Transform& trans);
   // Try to find a loop closure given 2 image identifiers
   bool getLoopClosure(string image_id_a,
@@ -107,9 +100,8 @@ public:
 private:
 
   // Compute the loop closure
-  bool compute(Image ref_image,
-               string cur_filename,
-               string &lc_img_name,
+  bool compute(Image query,
+               Image candidate,
                int &matches,
                int &inliers,
                tf::Transform& trans);
@@ -133,15 +125,20 @@ private:
   void groupSimilarImages(vector< pair<int,float> > matchings,
                           vector< vector<int> > &groups);
 
+  // Get the image information from file
+  Image getImage(string img_file);
+
   // Properties
-  Params params_;                       //!> Stores parameters
-  Image img_;                           //!> Image object
-  Hash hash_;                           //!> Hash object
-  int img_id_;                          //!> Incremental index for the stored images
-  Mat camera_matrix_;                   //!> Used to save the camera matrix
+  Params params_;                                   //!> Stores parameters
+  Image query_;                                     //!> Query image object
+  Hash hash_;                                       //!> Hash object
+  int img_id_;                                      //!> Incremental index for the stored images
+  Mat camera_matrix_;                               //!> Used to save the camera matrix
   vector< pair<int, vector<float> > > hash_table_;  //!> Hash table
-  vector<int> lc_candidate_positions_;  //!> Loop closure candidate positions
-  vector< pair<int,float> > prev_likelihood_; //!> Stores the previous likelihood vector
+  vector<int> lc_candidate_positions_;              //!> Loop closure candidate positions
+  vector< pair<int,float> > prev_likelihood_;       //!> Stores the previous likelihood vector
+  vector< pair<int, int > > lc_found_;              //!> Stores all the loop closures found in order to do not repeat them.
+
 
 };
 
