@@ -18,7 +18,7 @@
 
 		<param name="tmp_id" value="$(arg tmp_id)" />
 
-		<param name="output_path" value="~/libhaloc/exec_tmp" />
+		<param name="output_path" value="/var/www/html/libhaloc/exec_tmp" />
 		<param name="img_dir" value="$(arg img_dir)" />
 		<param name="gt_file" value="$(arg gt_file)" />
 
