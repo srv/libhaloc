@@ -58,8 +58,8 @@ Most Important Parameters
 * `desc_type` - Type of the descriptors (can be SIFT, SURF).
 * `desc_matching_type` - Can be CROSSCHECK or RATIO.
 * `desc_thresh_ratio` - Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
-* `min_neighbour` - Minimum number of neighbours that will be skiped for the loop closure (tipically between 5-20, but depends on the frame rate).
-* `n_candidates` - Get the n first candidates of the hash matching (tipically between 1-5).
+* `min_neighbor` - Minimum number of neighbors that will be skiped for the loop closure (typically between 5-20, but depends on the frame rate).
+* `n_candidates` - Get the n first candidates of the hash matching (typically between 1-5).
 * `min_matches` - Minimun number of descriptor matches to consider a matching as possible loop closure (>8).
 * `min_inliers` - Minimum number of inliers to consider a matching as possible loop closure (>8).
 

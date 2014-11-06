@@ -17,8 +17,8 @@ bool start_node(libhaloc::RemoteExecution::Request  &req,
 							req.desc_type + " desc_matching_type:=" +
 							req.desc_matching_type + " desc_thresh_ratio:=" +
 							req.desc_thresh_ratio + " num_proj:=" +
-							req.num_proj + " min_neighbour:=" +
-							req.min_neighbour + " n_candidates:=" +
+							req.num_proj + " min_neighbor:=" +
+							req.min_neighbor + " n_candidates:=" +
 							req.n_candidates + " min_matches:=" +
 							req.min_matches + " min_inliers:=" +
 							req.min_inliers + " gt_tolerance:=" +

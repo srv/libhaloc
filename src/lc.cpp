@@ -23,7 +23,7 @@ haloc::LoopClosure::Params::Params() :
   desc_matching_type("CROSSCHECK"),
   desc_thresh_ratio(DEFAULT_DESC_THRESH_RATIO),
   epipolar_thresh(DEFAULT_EPIPOLAR_THRESH),
-  min_neighbour(DEFAULT_MIN_NEIGHBOUR),
+  min_neighbor(DEFAULT_MIN_NEIGHBOR),
   n_candidates(DEFAULT_N_CANDIDATES),
   group_range(DEFAULT_GROUP_RANGE),
   min_matches(DEFAULT_MIN_MATCHES),
@@ -50,7 +50,7 @@ void haloc::LoopClosure::setParams(const Params& params)
   cout << "  desc_matching_type = " << params_.desc_matching_type << endl;
   cout << "  desc_thresh_ratio  = " << params_.desc_thresh_ratio << endl;
   cout << "  epipolar_thresh    = " << params_.epipolar_thresh << endl;
-  cout << "  min_neighbour      = " << params_.min_neighbour << endl;
+  cout << "  min_neighbor       = " << params_.min_neighbor << endl;
   cout << "  n_candidates       = " << params_.n_candidates << endl;
   cout << "  group_range        = " << params_.group_range << endl;
   cout << "  min_matches        = " << params_.min_matches << endl;
@@ -196,8 +196,8 @@ void haloc::LoopClosure::getCandidates(int image_id,
   // Init
   candidates.clear();
 
-  // Check if enough neighbours
-  if ((int)hash_table_.size() <= params_.min_neighbour) return;
+  // Check if enough neighbors
+  if ((int)hash_table_.size() <= params_.min_neighbor) return;
 
   // Query matching versus all the hash table
   vector< pair<int,float> > best_matchings;
@@ -497,7 +497,7 @@ void haloc::LoopClosure::getBestMatchings(int image_id,
 
   // Loop over all the hashes stored
   vector< pair<int,float> > all_matchings;
-  for (uint i=0; i<hash_table_.size()-params_.min_neighbour-1; i++)
+  for (uint i=0; i<hash_table_.size()-params_.min_neighbor-1; i++)
   {
     // Do not compute the hash matching with itself
     if (hash_table_[i].first == image_id) continue;

@@ -120,7 +120,7 @@ void haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
   vector<KeyPoint> matched_kp_l;
   vector<Point3f> matched_3d_points;
   Mat matched_desc_l;
-  for (size_t i = 0; i < matches_filtered.size(); ++i)
+  for (size_t i=0; i<matches_filtered.size(); ++i)
   {
     int index_left = matches_filtered[i].queryIdx;
     int index_right = matches_filtered[i].trainIdx;

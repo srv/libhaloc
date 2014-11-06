@@ -5,7 +5,7 @@ string desc_type
 string desc_matching_type
 string desc_thresh_ratio
 string num_proj
-string min_neighbour
+string min_neighbor
 string n_candidates
 string min_matches
 string min_inliers
