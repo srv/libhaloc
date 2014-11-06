@@ -59,7 +59,7 @@ class EvaluationNode
       nhp_.param("desc_matching_type", lc_params.desc_matching_type, string("CROSSCHECK"));
       nhp_.param<double>("desc_thresh_ratio", lc_params.desc_thresh_ratio, 0.7);
       nhp_.param<int>("num_proj", lc_params.num_proj, 2);
-      nhp_.param<int>("min_neighbour", lc_params.min_neighbour, 1);
+      nhp_.param<int>("min_neighbor", lc_params.min_neighbor, 1);
       nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
       lc_.setParams(lc_params);
 

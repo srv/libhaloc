@@ -11,7 +11,7 @@
 
 		<param name="num_proj" value="3" />
 
-		<param name="min_neighbour" value="11" />
+		<param name="min_neighbor" value="11" />
 		<param name="n_candidates" value="10" />
 		<param name="min_matches" value="10" />
 		<param name="min_inliers" value="10" />

@@ -90,7 +90,7 @@ class Mono
       lc_params.desc_matching_type = desc_matching_type_;
       lc_params.desc_thresh_ratio = desc_thresh_ratio_;
       lc_params.epipolar_thresh = epipolar_thresh_;
-      lc_params.min_neighbour = min_neighbour_;
+      lc_params.min_neighbor = min_neighbor_;
       lc_params.n_candidates = n_candidates_;
       lc_params.min_matches = min_matches_;
       lc_params.min_inliers = min_inliers_;
@@ -194,7 +194,7 @@ class Mono
       f_out <<  desc_type_ << "," <<
                 desc_matching_type_ << "," <<
                 desc_thresh_ratio_ << "," <<
-                min_neighbour_ << "," <<
+                min_neighbor_ << "," <<
                 n_candidates_ << "," <<
                 min_matches_ << "," <<
                 min_inliers_ << "," <<
@@ -221,7 +221,7 @@ class Mono
     // Properties
     string tmp_id_, img_dir_, desc_type_, desc_matching_type_, output_path_, gt_file_;
     double desc_thresh_ratio_, epipolar_thresh_;
-    int min_neighbour_, n_candidates_, min_matches_, min_inliers_, gt_tolerance_;
+    int min_neighbor_, n_candidates_, min_matches_, min_inliers_, gt_tolerance_;
     haloc::LoopClosure lc_;
 
     /** \brief Read the parameters from the ros parameter server
@@ -235,7 +235,7 @@ class Mono
       nh_private_.param("desc_type", desc_type_, std::string("SIFT"));
       nh_private_.param("desc_matching_type", desc_matching_type_, std::string("CROSSCHECK"));
       nh_private_.getParam("desc_thresh_ratio", desc_thresh_ratio_);
-      nh_private_.getParam("min_neighbour", min_neighbour_);
+      nh_private_.getParam("min_neighbor", min_neighbor_);
       nh_private_.getParam("n_candidates", n_candidates_);
       nh_private_.getParam("min_matches", min_matches_);
       nh_private_.getParam("min_inliers", min_inliers_);
@@ -248,7 +248,7 @@ class Mono
       cout << "  img_dir           = " << img_dir_ << endl;
       cout << "  desc_type         = " << desc_type_ << endl;
       cout << "  desc_thresh_ratio = " << desc_thresh_ratio_ << endl;
-      cout << "  min_neighbour     = " << min_neighbour_ << endl;
+      cout << "  min_neighbor      = " << min_neighbor_ << endl;
       cout << "  n_candidates      = " << n_candidates_ << endl;
       cout << "  min_matches       = " << min_matches_ << endl;
       cout << "  min_inliers       = " << min_inliers_ << endl;

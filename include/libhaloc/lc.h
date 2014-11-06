@@ -34,7 +34,7 @@ public:
     string desc_matching_type;          //!> Can be "CROSSCHECK" or "RATIO"
     double desc_thresh_ratio;           //!> Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
     int epipolar_thresh;                //!> Epipolar threshold.
-    int min_neighbour;                  //!> Minimum number of neighbours that will be skipped for the loop closure (typically between 5-20, but depends on the frame rate).
+    int min_neighbor;                   //!> Minimum number of neighbors that will be skipped for the loop closure (typically between 5-20, but depends on the frame rate).
     int n_candidates;                   //!> Get the n first candidates of the hash matching (typically between 2-10).
     int group_range;                    //!> Maximum difference between images to be considered of the same group (typically between 5-10).
     int min_matches;                    //!> Minimum number of descriptor matches to consider a matching as possible loop closure (>8).
@@ -46,7 +46,7 @@ public:
     static const int                    DEFAULT_NUM_PROJ = 2;
     static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
-    static const int                    DEFAULT_MIN_NEIGHBOUR = 10;
+    static const int                    DEFAULT_MIN_NEIGHBOR = 10;
     static const int                    DEFAULT_N_CANDIDATES = 2;
     static const int                    DEFAULT_GROUP_RANGE = 5;
     static const int                    DEFAULT_MIN_MATCHES = 20;

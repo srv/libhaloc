@@ -8,7 +8,7 @@
 	<arg name="desc_matching_type" />
 	<arg name="desc_thresh_ratio" />
 	<arg name="num_proj" />
-	<arg name="min_neighbour" />
+	<arg name="min_neighbor" />
 	<arg name="n_candidates" />
 	<arg name="min_matches" />
 	<arg name="min_inliers" />
@@ -28,7 +28,7 @@
 
 		<param name="num_proj" value="$(arg num_proj)" />
 
-		<param name="min_neighbour" value="$(arg min_neighbour)" />
+		<param name="min_neighbor" value="$(arg min_neighbor)" />
 		<param name="n_candidates" value="$(arg n_candidates)" />
 		<param name="min_matches" value="$(arg min_matches)" />
 		<param name="min_inliers" value="$(arg min_inliers)" />
