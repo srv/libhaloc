@@ -342,13 +342,13 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
   * @return true if valid loop closure, false otherwise.
   * \param reference image id.
   * \param current image id.
-  * \param Return the number of matches found.
-  * \param Return the number of inliers found.
   * \param Return the transform between nodes if loop closure is valid.
+  * \param Show output log or not.
   */
 bool haloc::LoopClosure::getLoopClosure(string image_id_a,
                                         string image_id_b,
-                                        tf::Transform& trans)
+                                        tf::Transform& trans,
+                                        bool logging)
 {
   // Image a
   string file_a = params_.work_dir+"/"+image_id_a+".yml";
@@ -368,7 +368,7 @@ bool haloc::LoopClosure::getLoopClosure(string image_id_a,
     lc_found_.push_back(make_pair(lexical_cast<int>(image_id_a), lexical_cast<int>(image_id_b)));
   }
 
-  if(params_.verbose && valid)
+  if(params_.verbose && valid && logging)
     ROS_INFO_STREAM("[libhaloc:] Loop closed by ID between " <<
                     image_id_a << " and " << image_id_b <<
                     " (matches: " << matches << "; inliers: " <<
