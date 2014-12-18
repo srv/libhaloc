@@ -43,16 +43,24 @@ void haloc::Image::setCameraModel(image_geometry::StereoCameraModel stereo_camer
 }
 
 /** \brief Compute the keypoints and descriptors for one image (mono)
+  * @return false if not enough keypoints. True otherwise.
   * \param Image identifier
   * \param cvMat image
   */
-void haloc::Image::setMono(int id, const Mat& img)
+bool haloc::Image::setMono(int id, const Mat& img)
 {
+  // Reset
+  kp_.clear();
+  desc_.release();
   id_ = id;
 
   // Extract keypoints
   vector<KeyPoint> kp;
   haloc::Utils::keypointDetector(img, kp, params_.desc_type);
+
+  // Check if the number of kp is enough for the computation of the 3D
+  if (kp.size() < params_.min_matches)
+    return false;
 
   // Extract descriptors
   desc_.release();
@@ -65,12 +73,17 @@ void haloc::Image::setMono(int id, const Mat& img)
 }
 
 /** \brief Compute the keypoints and descriptors for two images (stereo)
+  * @return false if not enough stereo matches. True otherwise.
   * \param Image identifier
   * \param cvMat image for left frame
   * \param cvMat image for right frame
   */
-void haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
+bool haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
 {
+  // Reset
+  kp_.clear();
+  desc_.release();
+  points_3d_.clear();
   id_ = id;
 
   // Extract keypoints (left)
@@ -116,6 +129,10 @@ void haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
       matches_filtered.push_back(matches[i]);
   }
 
+  // Check if the number of matches is enough for the computation of the 3D
+  if (matches_filtered.size() < params_.min_matches)
+    return false;
+
   // Compute 3D points
   vector<KeyPoint> matched_kp_l;
   vector<Point3f> matched_3d_points;
@@ -144,4 +161,6 @@ void haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
 
   // Save 3D
   points_3d_ = matched_3d_points;
+
+  return true;
 }

@@ -126,7 +126,8 @@ void haloc::LoopClosure::finalize()
 int haloc::LoopClosure::setNode(Mat img)
 {
   // Set the image
-  query_.setMono(img_id_, img);
+  if (!query_.setMono(img_id_, img))
+    return -1;
 
   // Initialize hash
   if (!hash_.isInitialized())
@@ -150,14 +151,15 @@ int haloc::LoopClosure::setNode(Mat img)
 
 
 /** \brief Compute kp, desc and hash for two images (stereo version).
-  * @return the node unique identifier
+  * @return the node unique identifier, -1 if the node cannot be inserted due to its poor quality.
   * \param cvMat containing the left image.
   * \param cvMat containing the right image.
   */
 int haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
 {
-  // Set the image
-  query_.setStereo(img_id_, img_l, img_r);
+  // Set the images
+  if (!query_.setStereo(img_id_, img_l, img_r))
+    return -1;
 
   // Initialize hash
   if (!hash_.isInitialized())
@@ -368,7 +370,7 @@ bool haloc::LoopClosure::getLoopClosure(string image_id_a,
     lc_found_.push_back(make_pair(lexical_cast<int>(image_id_a), lexical_cast<int>(image_id_b)));
   }
 
-  if(params_.verbose && valid && logging)
+  if(params_.verbose && logging)
     ROS_INFO_STREAM("[libhaloc:] Loop closed by ID between " <<
                     image_id_a << " and " << image_id_b <<
                     " (matches: " << matches << "; inliers: " <<
