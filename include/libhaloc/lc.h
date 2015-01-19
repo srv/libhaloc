@@ -95,7 +95,8 @@ public:
   // Try to find a loop closure given 2 image identifiers
   bool getLoopClosure(string image_id_a,
                       string image_id_b,
-                      tf::Transform& trans);
+                      tf::Transform& trans,
+                      bool logging=false);
 
 private:
 

@@ -45,10 +45,10 @@ public:
   inline Params params() const { return params_; }
 
   // Compute the keypoints and descriptors for one image (mono)
-  void setMono(int id, const Mat& img);
+  bool setMono(int id, const Mat& img);
 
   // Compute the keypoints, descriptors and 3d points for two images (stereo)
-  void setStereo(int id, const Mat& img_l, const Mat& img_r);
+  bool setStereo(int id, const Mat& img_l, const Mat& img_r);
 
   // Save the camera model
   void setCameraModel(image_geometry::StereoCameraModel stereo_camera_model);
