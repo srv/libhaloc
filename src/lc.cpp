@@ -75,10 +75,13 @@ void haloc::LoopClosure::setCameraModel(image_geometry::StereoCameraModel stereo
 void haloc::LoopClosure::init()
 {
   // Working directory sanity check
-  if (params_.work_dir[params_.work_dir.length()-1] != '/')
-    params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
-  else
-    params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
+  if (params_.work_dir.find("haloc_") == std::string::npos)
+  {
+    if (params_.work_dir[params_.work_dir.length()-1] != '/')
+      params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
+    else
+      params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
+  }
 
   // Create the directory to store the keypoints and descriptors
   if (fs::is_directory(params_.work_dir))
