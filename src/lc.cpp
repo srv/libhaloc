@@ -75,10 +75,13 @@ void haloc::LoopClosure::setCameraModel(image_geometry::StereoCameraModel stereo
 void haloc::LoopClosure::init()
 {
   // Working directory sanity check
-  if (params_.work_dir[params_.work_dir.length()-1] != '/')
-    params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
-  else
-    params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
+  if (params_.work_dir.find("haloc_") == std::string::npos)
+  {
+    if (params_.work_dir[params_.work_dir.length()-1] != '/')
+      params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
+    else
+      params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
+  }
 
   // Create the directory to store the keypoints and descriptors
   if (fs::is_directory(params_.work_dir))
@@ -319,7 +322,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
 
     // Log
     if(params_.verbose)
-      ROS_INFO_STREAM("[libhaloc:] LC between nodes " <<
+      ROS_INFO_STREAM("[libhaloc:] LC by hash between nodes " <<
                       query_.getId() << " and " << lc_img_id <<
                       " (matches: " << matches << "; inliers: " <<
                       inliers << "; Position: " << final_img_idx+1 << "/" <<
@@ -330,7 +333,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
     // Log
     if(params_.verbose && best_lc_found != "")
     {
-      ROS_INFO_STREAM("[libhaloc:] No LC, but best candidate is node " <<
+      ROS_INFO_STREAM("[libhaloc:] No LC by hash, but best candidate is node " <<
                       best_lc_found << " (matches: " << max_matches <<
                       "; inliers: " << max_inliers << ").");
     }
@@ -371,10 +374,22 @@ bool haloc::LoopClosure::getLoopClosure(string image_id_a,
   }
 
   if(params_.verbose && logging)
-    ROS_INFO_STREAM("[libhaloc:] Loop closed by ID between " <<
-                    image_id_a << " and " << image_id_b <<
-                    " (matches: " << matches << "; inliers: " <<
-                    inliers << ").");
+  {
+    if (valid)
+    {
+      ROS_INFO_STREAM("[libhaloc:] LC by ID between " <<
+                      image_id_a << " and " << image_id_b <<
+                      " (matches: " << matches << "; inliers: " <<
+                      inliers << ").");
+    }
+    else
+    {
+      ROS_INFO_STREAM("[libhaloc:] No LC by ID between " <<
+                      image_id_a << " and " << image_id_b <<
+                      " (matches: " << matches << "; inliers: " <<
+                      inliers << ").");
+    }
+  }
   return valid;
 }
 

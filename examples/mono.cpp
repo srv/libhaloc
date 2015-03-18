@@ -106,6 +106,7 @@ class Mono
       int found_lc = 0;
       int true_positives = 0;
       int false_positives = 0;
+      vector<string> image_filenames;
       while (it!=v.end())
       {
         // Check if the directory entry is an directory.
@@ -114,6 +115,7 @@ class Mono
           // Get image
           string cur_filename = it->filename().string();
           Mat img = imread(img_dir_+"/"+cur_filename, CV_LOAD_IMAGE_COLOR);
+          image_filenames.push_back(cur_filename);
 
           // Set the new image
           lc_.setNode(img);
@@ -153,11 +155,17 @@ class Mono
 
           img_i++;
 
+          string lc_filename = "";
+          if (img_lc >= 0)
+          {
+            lc_filename = image_filenames[img_lc];
+          }
+
           // Log
           ROS_INFO_STREAM( cur_filename << " cl with " << img_lc << ": " << valid << ": " << tp << "|" << fa);
           fstream f_log(log_file_str.c_str(), ios::out | ios::app);
           f_log << cur_filename << "," <<
-                   img_lc << "," <<
+                   lc_filename << "," <<
                    img_lc << "," <<
                    valid << "," <<
                    tp << "," <<
