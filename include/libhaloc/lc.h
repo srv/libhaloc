@@ -8,7 +8,6 @@
 #include "image.h"
 
 using namespace std;
-using namespace cv;
 using namespace Eigen;
 
 namespace haloc
@@ -28,7 +27,8 @@ public:
     Params();
 
     // Class parameters
-    string work_dir;                    //!> Directory where the library will save the image informations (must be writable!).
+    string work_dir;                    //!> Directory where the library will save the image informations.
+    string image_dir;                   //!> Directory where images will be saved (if save_images = True).
     int num_proj;                       //!> Number of projections required.
     string desc_type;                   //!> Type of the descriptors (can be SIFT, SURF).
     string desc_matching_type;          //!> Can be "CROSSCHECK" or "RATIO"
@@ -41,6 +41,7 @@ public:
     int min_inliers;                    //!> Minimum number of inliers to consider a matching as possible loop closure (>8).
     double max_reproj_err;              //!> Maximum reprojection error (stereo only).
     bool verbose;                       //!> Set to true to show logs in the screen.
+    bool save_images;                   //!> True to save the images into a directory.
 
     // Default values
     static const int                    DEFAULT_NUM_PROJ = 2;
@@ -53,6 +54,7 @@ public:
     static const int                    DEFAULT_MIN_INLIERS = 12;
     static const double                 DEFAULT_MAX_REPROJ_ERR = 2.0;
     static const bool                   DEFAULT_VERBOSE = false;
+    static const bool                   DEFAULT_SAVE_IMAGES = false;
   };
 
   // Set the parameter struct.
@@ -69,14 +71,14 @@ public:
 
   // Save the camera model.
   void setCameraModel(image_geometry::StereoCameraModel stereo_camera_model,
-                      Mat camera_matrix);
+                      cv::Mat camera_matrix);
 
   // Compute kp, desc and hash for one image (mono version).
-  int setNode(Mat img);
+  int setNode(cv::Mat img);
 
   // Compute kp, desc and hash for two images (stereo version).
-  int setNode(Mat img_l,
-              Mat img_r);
+  int setNode(cv::Mat img_l,
+              cv::Mat img_r);
 
   // Retrieve the candidates to close loop with the last saved node.
   void getCandidates(vector< pair<int,float> >& candidates);
@@ -134,7 +136,7 @@ private:
   Image query_;                                     //!> Query image object
   Hash hash_;                                       //!> Hash object
   int img_id_;                                      //!> Incremental index for the stored images
-  Mat camera_matrix_;                               //!> Used to save the camera matrix
+  cv::Mat camera_matrix_;                           //!> Used to save the camera matrix
   vector< pair<int, vector<float> > > hash_table_;  //!> Hash table
   vector<int> lc_candidate_positions_;              //!> Loop closure candidate positions
   vector< pair<int,float> > prev_likelihood_;       //!> Stores the previous likelihood vector

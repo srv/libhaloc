@@ -10,6 +10,8 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/math/distributions.hpp>
+#include <cv.h>
+#include <highgui.h>
 
 using namespace boost;
 namespace fs=filesystem;
@@ -18,6 +20,7 @@ namespace fs=filesystem;
   */
 haloc::LoopClosure::Params::Params() :
   work_dir(""),
+  image_dir(""),
   num_proj(DEFAULT_NUM_PROJ),
   desc_type("SIFT"),
   desc_matching_type("CROSSCHECK"),
@@ -29,7 +32,8 @@ haloc::LoopClosure::Params::Params() :
   min_matches(DEFAULT_MIN_MATCHES),
   min_inliers(DEFAULT_MIN_INLIERS),
   max_reproj_err(DEFAULT_MAX_REPROJ_ERR),
-  verbose(DEFAULT_VERBOSE)
+  verbose(DEFAULT_VERBOSE),
+  save_images(DEFAULT_SAVE_IMAGES)
 {}
 
 /** \brief LoopClosure class constructor.
@@ -43,8 +47,12 @@ void haloc::LoopClosure::setParams(const Params& params)
 {
   params_ = params;
 
+  // Will be the same
+  params_.image_dir = params_.work_dir;
+
   // Log
   cout << "  work_dir           = " << params_.work_dir << endl;
+  cout << "  image_dir          = " << params_.image_dir << endl;
   cout << "  num_proj           = " << params_.num_proj << endl;
   cout << "  desc_type          = " << params_.desc_type << endl;
   cout << "  desc_matching_type = " << params_.desc_matching_type << endl;
@@ -57,6 +65,7 @@ void haloc::LoopClosure::setParams(const Params& params)
   cout << "  min_inliers        = " << params_.min_inliers << endl;
   cout << "  max_reproj_err     = " << params_.max_reproj_err << endl;
   cout << "  verbose            = " << params_.verbose << endl;
+  cout << "  save_images        = " << params_.save_images << endl;
 
 }
 
@@ -75,13 +84,10 @@ void haloc::LoopClosure::setCameraModel(image_geometry::StereoCameraModel stereo
 void haloc::LoopClosure::init()
 {
   // Working directory sanity check
-  if (params_.work_dir.find("haloc_") == std::string::npos)
-  {
-    if (params_.work_dir[params_.work_dir.length()-1] != '/')
-      params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
-    else
-      params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
-  }
+  if (params_.work_dir[params_.work_dir.length()-1] != '/')
+    params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
+  else
+    params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
 
   // Create the directory to store the keypoints and descriptors
   if (fs::is_directory(params_.work_dir))
@@ -89,6 +95,22 @@ void haloc::LoopClosure::init()
   fs::path dir(params_.work_dir);
   if (!fs::create_directory(dir))
     ROS_ERROR("[Haloc:] ERROR -> Impossible to create the execution directory.");
+
+  // Image directory sanity check
+  if (params_.save_images)
+  {
+    if (params_.image_dir[params_.image_dir.length()-1] != '/')
+      params_.image_dir += "/images/";
+    else
+      params_.image_dir += "images/";
+
+    // Create the directory to store the keypoints and descriptors
+    if (fs::is_directory(params_.image_dir))
+      fs::remove_all(params_.image_dir);
+    fs::path dir(params_.image_dir);
+    if (!fs::create_directory(dir))
+      ROS_ERROR("[Haloc:] ERROR -> Impossible to create the image directory.");
+  }
 
   // Initialize image properties
   haloc::Image::Params img_params;
@@ -132,6 +154,12 @@ int haloc::LoopClosure::setNode(Mat img)
   if (!query_.setMono(img_id_, img))
     return -1;
 
+  if (params_.save_images)
+  {
+    string path = params_.image_dir + lexical_cast<string>(img_id_) + ".png";
+    cv::imwrite(path, img);
+  }
+
   // Initialize hash
   if (!hash_.isInitialized())
     hash_.init(query_.getDesc(), true);
@@ -163,6 +191,12 @@ int haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
   // Set the images
   if (!query_.setStereo(img_id_, img_l, img_r))
     return -1;
+
+  if (params_.save_images)
+  {
+    string path = params_.image_dir + lexical_cast<string>(img_id_) + ".png";
+    cv::imwrite(path, img_l);
+  }
 
   // Initialize hash
   if (!hash_.isInitialized())
