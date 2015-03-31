@@ -8,7 +8,10 @@ haloc::Image::Params::Params() :
   desc_matching_type("CROSSCHECK"),
   desc_thresh_ratio(DEFAULT_DESC_THRESH_RATIO),
   min_matches(DEFAULT_MIN_MATCHES),
-  epipolar_thresh(DEFAULT_EPIPOLAR_THRESH)
+  epipolar_thresh(DEFAULT_EPIPOLAR_THRESH),
+  b_width(DEFAULT_B_WIDTH),
+  b_height(DEFAULT_B_HEIGHT),
+  b_max_features(DEFAULT_B_MAX_FEATURES)
 {}
 
 /** \brief Image constructor
@@ -70,6 +73,8 @@ bool haloc::Image::setMono(int id, const Mat& img)
   kp_.clear();
   for(int i=0; i<kp.size(); i++)
     kp_.push_back(kp[i].pt);
+
+  return true;
 }
 
 /** \brief Compute the keypoints and descriptors for two images (stereo)
@@ -129,6 +134,9 @@ bool haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
       matches_filtered.push_back(matches[i]);
   }
 
+  // Bucket features
+  matches_filtered = bucketFeatures(matches_filtered, kp_l);
+
   // Check if the number of matches is enough for the computation of the 3D
   if (matches_filtered.size() < params_.min_matches)
     return false;
@@ -163,4 +171,57 @@ bool haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
   points_3d_ = matched_3d_points;
 
   return true;
+}
+
+/** \brief Bucket features
+  * @return the bucketed matches
+  * \param input matches
+  * \param input keypoints
+  * \param bucket with
+  * \param bucket height
+  * \param number of features per bucket
+  */
+vector<DMatch> haloc::Image::bucketFeatures(vector<DMatch> matches,
+                                            vector<KeyPoint> kp)
+{
+  // Find max values
+  float x_max = 0;
+  float y_max = 0;
+  for (vector<DMatch>::iterator it = matches.begin(); it!=matches.end(); it++)
+  {
+    if (kp[it->queryIdx].pt.x > x_max) x_max = kp[it->queryIdx].pt.x;
+    if (kp[it->queryIdx].pt.y > y_max) y_max = kp[it->queryIdx].pt.y;
+  }
+
+  // Allocate number of buckets needed
+  int bucket_cols = (int)floor(x_max/params_.b_width) + 1;
+  int bucket_rows = (int)floor(y_max/params_.b_height) + 1;
+  vector<DMatch> *buckets = new vector<DMatch>[bucket_cols*bucket_rows];
+
+  // Assign matches to their buckets
+  for (vector<DMatch>::iterator it=matches.begin(); it!=matches.end(); it++)
+  {
+    int u = (int)floor(kp[it->queryIdx].pt.x/params_.b_width);
+    int v = (int)floor(kp[it->queryIdx].pt.y/params_.b_height);
+    buckets[v*bucket_cols+u].push_back(*it);
+  }
+
+  // Refill matches from buckets
+  vector<DMatch> output;
+  for (int i=0; i<bucket_cols*bucket_rows; i++)
+  {
+    // Sort descriptors matched by distance
+    sort(buckets[i].begin(), buckets[i].end(), haloc::Utils::sortDescByDistance);
+
+    // Add up to max_features features from this bucket to output
+    int k=0;
+    for (vector<cv::DMatch>::iterator it=buckets[i].begin(); it!=buckets[i].end(); it++)
+    {
+      output.push_back(*it);
+      k++;
+      if (k >= params_.b_max_features)
+        break;
+    }
+  }
+  return output;
 }

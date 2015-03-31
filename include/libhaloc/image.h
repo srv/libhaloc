@@ -31,11 +31,17 @@ public:
     double desc_thresh_ratio;           //!> Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
     int min_matches;                    //!> Minimum number of descriptor matches (as for lc.h) here is only used to determine the descriptor matching procedure.
     int epipolar_thresh;                //!> Epipolar threshold (stereo only).
+    int b_width;                        //!> Bucket with (only stereo)
+    int b_height;                       //!> Bucket height (only stereo)
+    int b_max_features;                 //!> Maximum number of features per bucket (only stereo).
 
     // Default values
     static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_MIN_MATCHES = 20;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
+    static const int                    DEFAULT_B_WIDTH = 40;
+    static const int                    DEFAULT_B_HEIGHT = 40;
+    static const int                    DEFAULT_B_MAX_FEATURES = 3;
   };
 
   // Set the parameter struct
@@ -68,6 +74,10 @@ public:
   // Get/set the 3D points
   vector<Point3f> get3D();
   void set3D(vector<Point3f> p3d);
+
+  // Bucket features
+  vector<DMatch> bucketFeatures(vector<DMatch> matches,
+                                vector<KeyPoint> kp);
 
 private:
 

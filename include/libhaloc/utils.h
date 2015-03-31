@@ -232,6 +232,16 @@ public:
     return (d1.second < d2.second);
   }
 
+  /** \brief Sort 2 descriptors matchings by distance
+    * @return true if vector 1 is smaller than vector 2
+    * \param descriptor matching 1
+    * \param descriptor matching 2
+    */
+  static bool sortDescByDistance(const DMatch& d1, const DMatch& d2)
+  {
+    return (d1.distance < d2.distance);
+  }
+
   /** \brief Sort 2 matchings by likelihood
     * @return true if likelihood 1 is greater than likelihood 2
     * \param likelihood 1

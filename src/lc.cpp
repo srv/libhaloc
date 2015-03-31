@@ -367,7 +367,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
     // Log
     if(params_.verbose && best_lc_found != "")
     {
-      ROS_INFO_STREAM("[libhaloc:] No LC by hash, but best candidate is node " <<
+      ROS_INFO_STREAM("[libhaloc:] No LC by hash, best candidate is " <<
                       best_lc_found << " (matches: " << max_matches <<
                       "; inliers: " << max_inliers << ").");
     }
