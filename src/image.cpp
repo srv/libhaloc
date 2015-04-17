@@ -29,8 +29,8 @@ void haloc::Image::setParams(const Params& params)
 // Access specifiers
 int haloc::Image::getId() { return id_; }
 void haloc::Image::setId(int id) { id_ = id; }
-vector<Point2f> haloc::Image::getKp() { return kp_; }
-void haloc::Image::setKp(vector<Point2f> kp) { kp_ = kp; }
+vector<KeyPoint> haloc::Image::getKp() { return kp_; }
+void haloc::Image::setKp(vector<KeyPoint> kp) { kp_ = kp; }
 Mat haloc::Image::getDesc() { return desc_; }
 void haloc::Image::setDesc(Mat desc) { desc_ = desc; }
 vector<Point3f> haloc::Image::get3D() { return points_3d_; };
@@ -57,9 +57,14 @@ bool haloc::Image::setMono(int id, const Mat& img)
   desc_.release();
   id_ = id;
 
+  // Equalize image
+  Mat img_gs;
+  cvtColor(img, img_gs, CV_BGR2GRAY);
+  equalizeHist(img_gs, img_gs);
+
   // Extract keypoints
   vector<KeyPoint> kp;
-  haloc::Utils::keypointDetector(img, kp, params_.desc_type);
+  haloc::Utils::keypointDetector(img_gs, kp, params_.desc_type);
 
   // Check if the number of kp is enough for the computation of the 3D
   if (kp.size() < params_.min_matches)
@@ -67,12 +72,11 @@ bool haloc::Image::setMono(int id, const Mat& img)
 
   // Extract descriptors
   desc_.release();
-  haloc::Utils::descriptorExtraction(img, kp, desc_, params_.desc_type);
+  haloc::Utils::descriptorExtraction(img_gs, kp, desc_, params_.desc_type);
 
   // Convert kp
   kp_.clear();
-  for(int i=0; i<kp.size(); i++)
-    kp_.push_back(kp[i].pt);
+  kp_ = kp;
 
   return true;
 }
@@ -91,21 +95,28 @@ bool haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
   points_3d_.clear();
   id_ = id;
 
+  // Equalize image
+  Mat img_l_gs, img_r_gs;
+  cvtColor(img_l, img_l_gs, CV_BGR2GRAY);
+  cvtColor(img_r, img_r_gs, CV_BGR2GRAY);
+  equalizeHist(img_l_gs, img_l_gs);
+  equalizeHist(img_r_gs, img_r_gs);
+
   // Extract keypoints (left)
   vector<KeyPoint> kp_l;
-  haloc::Utils::keypointDetector(img_l, kp_l, params_.desc_type);
+  haloc::Utils::keypointDetector(img_l_gs, kp_l, params_.desc_type);
 
   // Extract descriptors (left)
   Mat desc_l;
-  haloc::Utils::descriptorExtraction(img_l, kp_l, desc_l, params_.desc_type);
+  haloc::Utils::descriptorExtraction(img_l_gs, kp_l, desc_l, params_.desc_type);
 
   // Extract keypoints (right)
   vector<KeyPoint> kp_r;
-  haloc::Utils::keypointDetector(img_r, kp_r, params_.desc_type);
+  haloc::Utils::keypointDetector(img_r_gs, kp_r, params_.desc_type);
 
   // Extract descriptors (right)
   Mat desc_r;
-  haloc::Utils::descriptorExtraction(img_r, kp_r, desc_r, params_.desc_type);
+  haloc::Utils::descriptorExtraction(img_r_gs, kp_r, desc_r, params_.desc_type);
 
   // Find matches between left and right images
   Mat match_mask;
@@ -150,13 +161,18 @@ bool haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
     int index_left = matches_filtered[i].queryIdx;
     int index_right = matches_filtered[i].trainIdx;
     Point3d world_point;
-    haloc::Utils::calculate3DPoint( stereo_camera_model_,
-                                    kp_l[index_left].pt,
-                                    kp_r[index_right].pt,
-                                    world_point);
-    matched_kp_l.push_back(kp_l[index_left]);
-    matched_desc_l.push_back(desc_l.row(index_left));
-    matched_3d_points.push_back(world_point);
+    bool valid = haloc::Utils::calculate3DPoint(stereo_camera_model_,
+                                                kp_l[index_left].pt,
+                                                kp_r[index_right].pt,
+                                                0.002,
+                                                world_point);
+
+    if (valid)
+    {
+      matched_kp_l.push_back(kp_l[index_left]);
+      matched_desc_l.push_back(desc_l.row(index_left));
+      matched_3d_points.push_back(world_point);
+    }
   }
 
   // Save descriptors
@@ -164,8 +180,7 @@ bool haloc::Image::setStereo(int id, const Mat& img_l, const Mat& img_r)
 
   // Convert keypoints
   kp_.clear();
-  for(int i=0; i<matched_kp_l.size(); i++)
-    kp_.push_back(matched_kp_l[i].pt);
+  kp_ = matched_kp_l;
 
   // Save 3D
   points_3d_ = matched_3d_points;

@@ -13,6 +13,11 @@
 #include <cv.h>
 #include <highgui.h>
 
+#include "opencv2/core/core.hpp"
+#include "opencv2/features2d/features2d.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/nonfree/features2d.hpp"
+
 using namespace boost;
 namespace fs=filesystem;
 
@@ -157,7 +162,7 @@ int haloc::LoopClosure::setNode(Mat img)
   if (params_.save_images)
   {
     string path = params_.image_dir + lexical_cast<string>(img_id_) + ".png";
-    cv::imwrite(path, img);
+    imwrite(path, img);
   }
 
   // Initialize hash
@@ -194,8 +199,10 @@ int haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
 
   if (params_.save_images)
   {
-    string path = params_.image_dir + lexical_cast<string>(img_id_) + ".png";
-    cv::imwrite(path, img_l);
+    string path = params_.image_dir + lexical_cast<string>(img_id_) + "_l.png";
+    imwrite(path, img_l);
+    path = params_.image_dir + lexical_cast<string>(img_id_) + "_r.png";
+    imwrite(path, img_r);
   }
 
   // Initialize hash
@@ -465,21 +472,21 @@ bool haloc::LoopClosure::compute(Image query,
 
   matches = (int)desc_matches.size();
 
-  // Check matches size
+  // Matches threshold
   if (matches < params_.min_matches)
     return false;
 
   // Get the matched keypoints
-  vector<Point2f> query_kp = query.getKp();
-  vector<Point2f> candidate_kp = candidate.getKp();
+  vector<KeyPoint> query_kp = query.getKp();
+  vector<KeyPoint> candidate_kp = candidate.getKp();
   vector<Point3f> candidate_3d = candidate.get3D();
   vector<Point2f> query_matched_kp;
   vector<Point2f> candidate_matched_kp;
   vector<Point3f> candidate_matched_3d_points;
   for(int i=0; i<matches; i++)
   {
-    query_matched_kp.push_back(query_kp[desc_matches[i].trainIdx]);
-    candidate_matched_kp.push_back(candidate_kp[desc_matches[i].queryIdx]);
+    query_matched_kp.push_back(query_kp[desc_matches[i].trainIdx].pt);
+    candidate_matched_kp.push_back(candidate_kp[desc_matches[i].queryIdx].pt);
 
     // Only stereo
     if (candidate_3d.size() != 0)
@@ -513,9 +520,29 @@ bool haloc::LoopClosure::compute(Image query,
                    100, params_.max_reproj_err,
                    40, solvepnp_inliers);
 
+    // Inliers threshold
     inliers = (int)solvepnp_inliers.size();
     if (inliers < params_.min_inliers)
       return false;
+
+    // Save inliers matches
+    if (params_.save_images)
+    {
+      vector<DMatch> final_inliers;
+      for(int i=0; i<solvepnp_inliers.size(); i++)
+      {
+        int idx = solvepnp_inliers[i];
+        final_inliers.push_back(desc_matches[idx]);
+      }
+      Mat img_inliers;
+      string path_query = params_.image_dir + lexical_cast<string>(query.getId()) + "_l.png";
+      string path_candidate = params_.image_dir + lexical_cast<string>(candidate.getId()) + "_l.png";
+      string output = params_.image_dir + "inliers_" + lexical_cast<string>(query.getId()) + "_" + lexical_cast<string>(candidate.getId()) + ".png";
+      Mat img_query = imread(path_query, CV_LOAD_IMAGE_COLOR);
+      Mat img_candidate = imread(path_candidate, CV_LOAD_IMAGE_COLOR);
+      drawMatches(img_candidate, candidate_kp, img_query, query_kp, final_inliers, img_inliers);
+      imwrite(output, img_inliers);
+    }
 
     trans = haloc::Utils::buildTransformation(rvec, tvec);
   }
@@ -764,13 +791,14 @@ haloc::Image haloc::LoopClosure::getImage(string img_file)
   if (!fs.isOpened())
     ROS_ERROR("[Haloc:] ERROR -> Failed to open the image keypoints and descriptors.");
   int id;
-  vector<Point2f> kp;
+  vector<KeyPoint> kp;
   Mat desc;
   vector<Point3f> p3d;
   fs["id"] >> id;
-  fs["kp"] >> kp;
   fs["desc"] >> desc;
   fs["threed"] >> p3d;
+  FileNode kp_node = fs["kp"];
+  read(kp_node, kp);
   fs.release();
 
   // Set the properties of the image

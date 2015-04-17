@@ -64,8 +64,8 @@ public:
   void setId(int id);
 
   // Get/set the keypoints of the image (left for stereo)
-  vector<Point2f> getKp();
-  void setKp(vector<Point2f> kp);
+  vector<KeyPoint> getKp();
+  void setKp(vector<KeyPoint> kp);
 
   // Get/set the descriptors of the image (left for stereo)
   Mat getDesc();
@@ -85,7 +85,7 @@ private:
   image_geometry::StereoCameraModel
     stereo_camera_model_;               //!> Object to save the stereo camera model.
   int id_;                              //!> The current id for this image.
-  vector<Point2f> kp_;                  //!> Unfiltered keypoints of the images.
+  vector<KeyPoint> kp_;                 //!> Unfiltered keypoints of the images.
   Mat desc_;                            //!> Unfiltered descriptors of the images.
   vector<Point3f> points_3d_;           //!> 3D points of the stereo correspondences.
 };
