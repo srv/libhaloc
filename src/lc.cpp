@@ -224,6 +224,40 @@ int haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
   return query_.getId();
 }
 
+/** \brief Returns the hash for a some specific image id.
+  * @return true if hash found
+  * \param the image id.
+  * \param the returning hash.
+  */
+bool haloc::LoopClosure::getHash(int img_id, vector<float>& hash)
+{
+  hash.clear();
+  for (uint i=0; i<hash_table_.size(); i++)
+  {
+    if (hash_table_[i].first == img_id)
+    {
+      hash = hash_table_[i].second;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** \brief Computes the hash matching between 2 images
+  * @return true if hashes found
+  * \param the image id a.
+  * \param the image id b.
+  * \param the returning hash matching.
+  */
+bool haloc::LoopClosure::hashMatching(int img_id_a, int img_id_b, float& matching)
+{
+  matching = -1.0;
+  vector<float> hash_a, hash_b;
+  if(!getHash(img_id_a, hash_a)) return false;
+  if(!getHash(img_id_b, hash_b)) return false;
+  return hash_.match(hash_a, hash_b);
+}
+
 /** \brief Get the best n_candidates to close loop with the last image.
   * @return a hash matching vector containing the best image candidates and its likelihood.
   */
@@ -390,28 +424,31 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
   * \param current image id.
   * \param Return the transform between nodes if loop closure is valid.
   * \param Show output log or not.
+  * \param The number of matches
+  * \param The number of inliers
   */
-bool haloc::LoopClosure::getLoopClosure(string image_id_a,
-                                        string image_id_b,
+bool haloc::LoopClosure::getLoopClosure(int img_id_a,
+                                        int img_id_b,
                                         tf::Transform& trans,
+                                        int& matches,
+                                        int& inliers,
                                         bool logging)
 {
   // Image a
-  string file_a = params_.work_dir+"/"+image_id_a+".yml";
+  string file_a = params_.work_dir+"/"+lexical_cast<string>(img_id_a)+".yml";
   Image img_a = getImage(file_a);
 
   // Image b
-  string file_b = params_.work_dir+"/"+image_id_b+".yml";
+  string file_b = params_.work_dir+"/"+lexical_cast<string>(img_id_b)+".yml";
   Image img_b = getImage(file_b);
 
   // Get the loop closing (if any)
-  int matches, inliers;
   bool valid = compute(img_a, img_b, matches, inliers, trans);
 
   // If valid loop closure, save it
   if (valid)
   {
-    lc_found_.push_back(make_pair(lexical_cast<int>(image_id_a), lexical_cast<int>(image_id_b)));
+    lc_found_.push_back(make_pair(img_id_a, img_id_b));
   }
 
   if(params_.verbose && logging)
@@ -419,19 +456,35 @@ bool haloc::LoopClosure::getLoopClosure(string image_id_a,
     if (valid)
     {
       ROS_INFO_STREAM("[libhaloc:] LC by ID between " <<
-                      image_id_a << " and " << image_id_b <<
+                      img_id_a << " and " << img_id_b <<
                       " (matches: " << matches << "; inliers: " <<
                       inliers << ").");
     }
     else
     {
       ROS_INFO_STREAM("[libhaloc:] No LC by ID between " <<
-                      image_id_a << " and " << image_id_b <<
+                      img_id_a << " and " << img_id_b <<
                       " (matches: " << matches << "; inliers: " <<
                       inliers << ").");
     }
   }
   return valid;
+}
+
+/** \brief Compute the loop closure (if any) between A -> B.
+  * @return true if valid loop closure, false otherwise.
+  * \param reference image id.
+  * \param current image id.
+  * \param Return the transform between nodes if loop closure is valid.
+  * \param Show output log or not.
+  */
+bool haloc::LoopClosure::getLoopClosure(int img_id_a,
+                                        int img_id_b,
+                                        tf::Transform& trans,
+                                        bool logging)
+{
+  int matches, inliers;
+  return getLoopClosure(img_id_a, img_id_b, trans, matches, inliers, logging);
 }
 
 /** \brief Compute the loop closure (if any).

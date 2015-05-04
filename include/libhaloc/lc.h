@@ -80,6 +80,12 @@ public:
   int setNode(cv::Mat img_l,
               cv::Mat img_r);
 
+  // Returns the hash for a node.
+  bool getHash(int img_id, vector<float>& hash);
+
+  // Compute the hash matching between two nodes
+  bool hashMatching(int img_id_a, int img_id_b, float& matching);
+
   // Retrieve the candidates to close loop with the last saved node.
   void getCandidates(vector< pair<int,float> >& candidates);
 
@@ -95,9 +101,15 @@ public:
   bool getLoopClosure(int& lc_img_id,
                       tf::Transform& trans);
   // Try to find a loop closure given 2 image identifiers
-  bool getLoopClosure(string image_id_a,
-                      string image_id_b,
+  bool getLoopClosure(int img_id_a,
+                      int img_id_b,
                       tf::Transform& trans,
+                      bool logging=false);
+  bool getLoopClosure(int img_id_a,
+                      int img_id_b,
+                      tf::Transform& trans,
+                      int& matches,
+                      int& inliers,
                       bool logging=false);
 
 private:
