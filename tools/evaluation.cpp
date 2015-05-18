@@ -6,7 +6,16 @@
 #include <opencv2/nonfree/features2d.hpp>
 #include <boost/filesystem.hpp>
 #include <fstream>
+#include <numeric>
 #include "libhaloc/lc.h"
+
+// vlfeat library
+#include <kmeans.h>
+#include <host.h>
+#include <kdtree.h>
+#include <vlad.h>
+#include <vector>
+
 
 namespace fs=boost::filesystem;
 
@@ -38,10 +47,10 @@ class EvaluationNode
       nhp_.param<string>("trainbows_path", trainbows_path_, "trainbows.yml");
       nhp_.param<string>("gt_file", gt_file_, std::string(""));
 
-      // BoW trainer parameters
+      // BoW training parameters
       nhp_.param<int>("max_images", max_images_, 90);
-      nhp_.param<double>("cluster_size", cluster_size_, 0.4);
-      nhp_.param<double>("lower_information_bound", lower_information_bound_, 0);
+      nhp_.param<double>("cluster_size", cluster_size_, 320.0);
+      nhp_.param<double>("lower_information_bound", lower_information_bound_, 0.0);
       nhp_.param<int>("min_descriptor_count", min_descriptor_count_, 40);
 
       // BoW run parameters
@@ -52,6 +61,21 @@ class EvaluationNode
       nhp_.param<bool>("disable_unknown_match", disable_unknown_match_, false);
       nhp_.param<bool>("add_only_new_places", add_only_new_places_, false);
 
+      // VLAD parameters
+      int dimension, num_centers, maxiter, maxcomp, maxrep, ntrees;
+      nhp_.param<int>("dimension", dimension, 128);
+      nhp_.param<int>("num_centers", num_centers, 64);
+      nhp_.param<int>("maxiter", maxiter, 10);
+      nhp_.param<int>("maxrep", maxrep, 1);
+      nhp_.param<int>("ntrees", ntrees, 1);
+      nhp_.param<int>("maxcomp", maxcomp, 100);
+      dimension_ = dimension;
+      num_centers_ = num_centers;
+      maxiter_ = maxiter;
+      maxrep_ = maxrep;
+      ntrees_ = ntrees;
+      maxcomp_ = maxcomp;
+
       // Libhaloc
       haloc::LoopClosure::Params lc_params;
       nhp_.param("work_dir", lc_params.work_dir, string(""));
@@ -61,6 +85,8 @@ class EvaluationNode
       nhp_.param<int>("num_proj", lc_params.num_proj, 2);
       nhp_.param<int>("min_neighbor", lc_params.min_neighbor, 1);
       nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
+      min_neighbor_ = lc_params.min_neighbor;
+      n_candidates_ = lc_params.n_candidates;
       lc_.setParams(lc_params);
 
       // Output file
@@ -90,7 +116,7 @@ class EvaluationNode
     }
 
     // Openfabmap learning stage
-    void of2Learn()
+    void training()
     {
       // Sort directory of images
       typedef std::vector<fs::path> vec;
@@ -102,6 +128,9 @@ class EvaluationNode
       );
       sort(v.begin(), v.end());
       vec::const_iterator it(v.begin());
+
+      // Store all the descriptors to compute the cluster size
+      Mat all_descriptors;
 
       // Iterate over all images
       int train_count = 0;
@@ -119,19 +148,25 @@ class EvaluationNode
         string path = training_dir_ + "/" + filename;
         Mat img = imread(path, CV_LOAD_IMAGE_COLOR);
 
-        ROS_INFO("[Haloc:] Detect");
+        ROS_INFO("[Haloc:] Detect.");
         vector<KeyPoint> kpts;
         detector_->detect(img, kpts);
-        ROS_INFO("[Haloc:] Extract");
+        ROS_INFO("[Haloc:] Extract.");
         Mat descriptors;
         extractor_->compute(img, kpts, descriptors);
+
+        // Store the descriptors
+        for (int i = 1; i < descriptors.rows; i++)
+        {
+          all_descriptors.push_back(descriptors.row(i));
+        }
 
         // Check if frame was useful
         if (!descriptors.empty() && kpts.size() > min_descriptor_count_)
         {
           trainer_.add(descriptors);
           train_count++;
-          ROS_INFO_STREAM("[Haloc:] Added to trainer" << " (" << train_count << " / " << max_images_ << ")");
+          ROS_INFO_STREAM("[Haloc:] Added to trainer" << " (" << train_count << " / " << max_images_ << ").");
 
           // Add the frame to the sample pile
           frames_sampled_.push_back(path);
@@ -149,13 +184,42 @@ class EvaluationNode
         // Next directory entry
         it++;
       }
+      ROS_INFO_STREAM("[Haloc:] Number of processed descriptors: "  << all_descriptors.rows);
 
-      // Save all
+      // Save BoW
       shutdown();
+
+      // VLAD clustering initialization
+      ROS_INFO("[Haloc:] VLAD clustering...");
+      VlVectorComparisonType distance = VlDistanceL2;
+      VlKMeansAlgorithm algorithm = VlKMeansLloyd;
+      vl_size num_data = all_descriptors.rows;
+      kmeans_ = vl_kmeans_new (VL_TYPE_FLOAT, distance);
+      float *data = new float[dimension_ * num_data];
+
+      // Re-format the data matrix
+      vl_size data_idx, d;
+      for(data_idx=0; data_idx<num_data; data_idx++) {
+        for(d=0; d<dimension_; d++) {
+          data[data_idx*dimension_+d] = all_descriptors.at<float>(data_idx, d);
+        }
+      }
+
+      // kmeans settings
+      vl_kmeans_set_verbosity(kmeans_, 1);
+      vl_kmeans_set_max_num_iterations(kmeans_, maxiter_);
+      vl_kmeans_set_max_num_comparisons(kmeans_, maxcomp_);
+      vl_kmeans_set_num_repetitions(kmeans_, maxrep_);
+      vl_kmeans_set_num_trees(kmeans_, ntrees_);
+      vl_kmeans_set_algorithm(kmeans_, algorithm);
+
+      // VLAD clustering
+      vl_kmeans_cluster(kmeans_, data, dimension_, num_data, num_centers_);
+      ROS_INFO("[Haloc:] VLAD clustering completed!");
     }
 
     // Openfabmap running stage
-    void of2Run()
+    void run()
     {
       // Load trained data
       loadCodebook();
@@ -195,6 +259,9 @@ class EvaluationNode
       int image_id = -1;
       bool first_frame = true;
       vector<int> to_img_seq;
+
+      // Set of correspondences image <--> VLAD matrix
+      std:map<int, Mat> map_vlad;
 
       // Iterate over all images
       while (it!=v.end())
@@ -237,7 +304,6 @@ class EvaluationNode
 
 
         // OPENFABMAP ----------------------------------
-
         Mat bow;
         vector<KeyPoint> kpts;
         detector_->detect(img, kpts);
@@ -315,7 +381,7 @@ class EvaluationNode
         cout << "FABMAP IMAGES [ ";
         for (int i=0; i<matched_to_img_seq.size();i++)
           cout << matched_to_img_seq[i] << " ";
-        cout << "]   \t \t \t"  << bow_time.toSec() << " sec." << endl;
+        cout << "]   \t"  << bow_time.toSec() << " sec." << endl;
         cout << "FABMAP PROB [ ";
         for (int i=0; i<matched_to_img_match.size();i++)
           cout << matched_to_img_match[i] << " ";
@@ -323,8 +389,77 @@ class EvaluationNode
 
 
 
-        // GROUND TRUTH ----------------------------------
+        // VLAD ----------------------------------
+        kpts.clear();
+        Mat descriptors;
+        detector_->detect(img, kpts);
+        extractor_->compute(img, kpts, descriptors);
 
+        // Initialize and re-format input data
+        vl_size num_data_to_encode = descriptors.rows;
+        vl_uint32 *indexes = new vl_uint32[num_data_to_encode];
+        float *distances = new float[num_data_to_encode] ;
+        float *desc_to_encode = new float[num_data_to_encode * dimension_];
+        for(int i=0; i<num_data_to_encode; i++)
+        {
+          for(int d=0; d<dimension_; d++)
+            desc_to_encode[i*dimension_ + d] = descriptors.at<float>(i,d);
+        }
+
+        // Find nearest cluster centers for the data that should be encoded
+        ros::WallTime vlad_start = ros::WallTime::now();
+        vl_kmeans_quantize(kmeans_, indexes, distances, desc_to_encode ,num_data_to_encode);
+        float *assignments = new float[num_data_to_encode * num_centers_];
+        std::fill_n(assignments, num_data_to_encode * num_centers_, 0);
+        for(int i=0; i<num_data_to_encode; i++)
+          assignments[i * num_centers_ + indexes[i]] = 1.0;
+
+        // Variable "enc" will store the vlad global descriptor
+        float *enc = new float[dimension_ * num_centers_];
+        std::fill_n(enc, dimension_ * num_centers_ , 0);
+        vl_kmeans_get_centers(kmeans_);
+        vl_vlad_encode(enc, VL_TYPE_FLOAT, kmeans_->centers, dimension_, num_centers_, desc_to_encode, num_data_to_encode, assignments, 0) ;
+        Mat enc_mat = cv::Mat(dimension_, num_centers_, CV_32F, enc);
+        transpose(enc_mat, enc_mat);
+
+        // Store for future comparisons
+        map_vlad[image_id] = enc_mat;
+
+        // Search for loop closures
+        vector< pair<int,float> > vlad_candidates;
+        for (int i=0; i<(image_id - min_neighbor_-1); i++)
+        {
+          float msquared = 0.0;
+          for(int j=0; j<enc_mat.rows; j++)
+          {
+            float scalar_p = 0.0;
+            for(int d=0; d<enc_mat.cols; d++)
+              scalar_p += enc_mat.at<float>(j,d) * map_vlad[i].at<float>(j,d);
+            msquared += scalar_p;
+          }
+          vlad_candidates.push_back(make_pair(i, msquared));
+        }
+
+        vector<int> vlad_matchings;
+        if (vlad_candidates.size() > 0)
+        {
+          // Sort the candidates to close loop
+          std::sort(vlad_candidates.begin(), vlad_candidates.end(), EvaluationNode::sortBydistance);
+
+          for(int i=0; i<n_candidates_; i++)
+            vlad_matchings.push_back(vlad_candidates[i].first);
+        }
+
+        // Log
+        ros::WallDuration vlad_time = ros::WallTime::now() - vlad_start;
+        cout << "VLAD IMAGES [ ";
+        for (int i=0; i<vlad_matchings.size();i++)
+          cout << vlad_matchings[i] << " ";
+        cout << "]   \t \t \t"  << vlad_time.toSec() << " sec." << endl;
+
+
+
+        // GROUND TRUTH ----------------------------------
         vector<int> current_gt;
         if (ground_truth.size() > image_id)
         {
@@ -346,12 +481,14 @@ class EvaluationNode
         // Check if openfabmap and haloc have detected a correct loop
         int haloc_idx = -1;
         int openfabmap_idx = -1;
+        int vlad_idx = -1;
         bool haloc_valid = false;
         bool openfabmap_valid = false;
+        bool vlad_valid = false;
         for (uint i=0; i<current_gt.size(); i++)
         {
           // Exit
-          if (haloc_valid && openfabmap_valid) break;
+          if (haloc_valid && openfabmap_valid && vlad_valid) break;
 
           // HALOC
           if (!haloc_valid)
@@ -380,18 +517,34 @@ class EvaluationNode
               }
             }
           }
+
+          // VLAD
+          if (!vlad_valid)
+          {
+            for (uint j=0; j<vlad_matchings.size(); j++)
+            {
+              if (abs(vlad_matchings[j] - current_gt[i]) < 10)
+              {
+                vlad_idx = j;
+                vlad_valid = true;
+                break;
+              }
+            }
+          }
         }
 
         // If valid loop closure found, save the current index into a file
-        if (haloc_valid)
+        if (haloc_valid || openfabmap_valid || vlad_valid)
         {
           // Open to append
           fstream f_output(output_file_.c_str(), ios::out | ios::app);
           f_output << fixed << setprecision(9) <<
                 haloc_idx  << "," <<
                 openfabmap_idx << "," <<
+                vlad_idx << "," <<
                 haloc_time.toSec() << "," <<
-                bow_time.toSec() <<  endl;
+                bow_time.toSec() << "," <<
+                vlad_time.toSec() <<  endl;
           f_output.close();
         }
 
@@ -433,6 +586,17 @@ class EvaluationNode
     bool disable_unknown_match_;
     bool add_only_new_places_;
     Mat confusion_mat_;
+
+    // VLAD
+    vl_size dimension_;
+    vl_size num_centers_;
+    vl_size maxiter_ ;
+    vl_size maxcomp_;
+    vl_size maxrep_;
+    vl_size ntrees_;
+    VlKMeans *kmeans_;
+    int min_neighbor_;
+    int n_candidates_;
 
     // Finishes the learning stage
     void shutdown()
@@ -524,6 +688,12 @@ class EvaluationNode
       ROS_INFO("[Haloc:] Adding the trained bag of words...");
       fabMap_->addTraining(bows_);
     }
+
+    // Sort vectors by distance
+    static bool sortBydistance(const pair<int,float> p1, const pair<int,float> p2)
+    {
+      return (p1.second > p2.second);
+    }
 };
 
 int main(int argc, char** argv)
@@ -536,7 +706,7 @@ int main(int argc, char** argv)
   node.readParameters();
   node.init();
 
-  // BOW training
+  // BOW and VLAD training
   if (!node.training_dir_.empty())
   {
     // Sanity check
@@ -548,10 +718,10 @@ int main(int argc, char** argv)
     }
 
     // Training
-    node.of2Learn();
+    node.training();
   }
 
-  // BOW run
+  // Normal execution
   if (!node.running_dir_.empty())
   {
     // Sanity check
@@ -563,7 +733,7 @@ int main(int argc, char** argv)
     }
 
     // Run
-    node.of2Run();
+    node.run();
   }
 
   // Stop libhaloc

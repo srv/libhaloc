@@ -255,7 +255,8 @@ bool haloc::LoopClosure::hashMatching(int img_id_a, int img_id_b, float& matchin
   vector<float> hash_a, hash_b;
   if(!getHash(img_id_a, hash_a)) return false;
   if(!getHash(img_id_b, hash_b)) return false;
-  return hash_.match(hash_a, hash_b);
+  matching = hash_.match(hash_a, hash_b);
+  return true;
 }
 
 /** \brief Get the best n_candidates to close loop with the last image.

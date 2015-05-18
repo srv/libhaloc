@@ -138,9 +138,10 @@ void haloc::Hash::initProjections(int desc_size, bool orthogonal)
       // Add the solutions to the new vector
       for (uint n=0; n<r_.size(); n++)
         new_v.push_back(x(n));
+      new_v = unit_vector(new_v);
 
       // Push the new vector
-      r_.push_back(unit_vector(new_v));
+      r_.push_back(new_v);
     }
   }
   else
@@ -151,8 +152,6 @@ void haloc::Hash::initProjections(int desc_size, bool orthogonal)
       r_.push_back(unit_vector(r));
     }
   }
-
-
 }
 
 /** \brief Computes a random vector of some size
