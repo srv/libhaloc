@@ -7,7 +7,8 @@ find_package(catkin REQUIRED COMPONENTS
     cv_bridge
     image_geometry
     std_msgs
-    cmake_modules)
+    cmake_modules
+    libvlfeat)
 
 ## Declare ROS messages and services
 add_service_files(FILES RemoteExecution.srv)
@@ -27,6 +28,9 @@ include_directories(${Eigen_INCLUDE_DIRS})
 find_package(OpenCV REQUIRED)
 include_directories(${OpenCV_INCLUDE_DIRS})
 link_directories(${OpenCV_LIBRARY_DIRS})
+
+# Dependencies - libvlfeat:
+find_package(libvlfeat REQUIRED)
 
 catkin_package(INCLUDE_DIRS include LIBRARIES haloc)
 

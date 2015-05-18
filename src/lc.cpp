@@ -10,6 +10,13 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/math/distributions.hpp>
+#include <cv.h>
+#include <highgui.h>
+
+#include "opencv2/core/core.hpp"
+#include "opencv2/features2d/features2d.hpp"
+#include "opencv2/highgui/highgui.hpp"
+#include "opencv2/nonfree/features2d.hpp"
 
 using namespace boost;
 namespace fs=filesystem;
@@ -18,6 +25,7 @@ namespace fs=filesystem;
   */
 haloc::LoopClosure::Params::Params() :
   work_dir(""),
+  image_dir(""),
   num_proj(DEFAULT_NUM_PROJ),
   desc_type("SIFT"),
   desc_matching_type("CROSSCHECK"),
@@ -29,7 +37,8 @@ haloc::LoopClosure::Params::Params() :
   min_matches(DEFAULT_MIN_MATCHES),
   min_inliers(DEFAULT_MIN_INLIERS),
   max_reproj_err(DEFAULT_MAX_REPROJ_ERR),
-  verbose(DEFAULT_VERBOSE)
+  verbose(DEFAULT_VERBOSE),
+  save_images(DEFAULT_SAVE_IMAGES)
 {}
 
 /** \brief LoopClosure class constructor.
@@ -43,8 +52,12 @@ void haloc::LoopClosure::setParams(const Params& params)
 {
   params_ = params;
 
+  // Will be the same
+  params_.image_dir = params_.work_dir;
+
   // Log
   cout << "  work_dir           = " << params_.work_dir << endl;
+  cout << "  image_dir          = " << params_.image_dir << endl;
   cout << "  num_proj           = " << params_.num_proj << endl;
   cout << "  desc_type          = " << params_.desc_type << endl;
   cout << "  desc_matching_type = " << params_.desc_matching_type << endl;
@@ -57,6 +70,7 @@ void haloc::LoopClosure::setParams(const Params& params)
   cout << "  min_inliers        = " << params_.min_inliers << endl;
   cout << "  max_reproj_err     = " << params_.max_reproj_err << endl;
   cout << "  verbose            = " << params_.verbose << endl;
+  cout << "  save_images        = " << params_.save_images << endl;
 
 }
 
@@ -75,13 +89,10 @@ void haloc::LoopClosure::setCameraModel(image_geometry::StereoCameraModel stereo
 void haloc::LoopClosure::init()
 {
   // Working directory sanity check
-  if (params_.work_dir.find("haloc_") == std::string::npos)
-  {
-    if (params_.work_dir[params_.work_dir.length()-1] != '/')
-      params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
-    else
-      params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
-  }
+  if (params_.work_dir[params_.work_dir.length()-1] != '/')
+    params_.work_dir += "/haloc_" + lexical_cast<string>(time(0));
+  else
+    params_.work_dir += "haloc_" + lexical_cast<string>(time(0));
 
   // Create the directory to store the keypoints and descriptors
   if (fs::is_directory(params_.work_dir))
@@ -89,6 +100,22 @@ void haloc::LoopClosure::init()
   fs::path dir(params_.work_dir);
   if (!fs::create_directory(dir))
     ROS_ERROR("[Haloc:] ERROR -> Impossible to create the execution directory.");
+
+  // Image directory sanity check
+  if (params_.save_images)
+  {
+    if (params_.image_dir[params_.image_dir.length()-1] != '/')
+      params_.image_dir += "/images/";
+    else
+      params_.image_dir += "images/";
+
+    // Create the directory to store the keypoints and descriptors
+    if (fs::is_directory(params_.image_dir))
+      fs::remove_all(params_.image_dir);
+    fs::path dir(params_.image_dir);
+    if (!fs::create_directory(dir))
+      ROS_ERROR("[Haloc:] ERROR -> Impossible to create the image directory.");
+  }
 
   // Initialize image properties
   haloc::Image::Params img_params;
@@ -132,6 +159,12 @@ int haloc::LoopClosure::setNode(Mat img)
   if (!query_.setMono(img_id_, img))
     return -1;
 
+  if (params_.save_images)
+  {
+    string path = params_.image_dir + lexical_cast<string>(img_id_) + ".png";
+    imwrite(path, img);
+  }
+
   // Initialize hash
   if (!hash_.isInitialized())
     hash_.init(query_.getDesc(), true);
@@ -164,6 +197,14 @@ int haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
   if (!query_.setStereo(img_id_, img_l, img_r))
     return -1;
 
+  if (params_.save_images)
+  {
+    string path = params_.image_dir + lexical_cast<string>(img_id_) + "_l.png";
+    imwrite(path, img_l);
+    path = params_.image_dir + lexical_cast<string>(img_id_) + "_r.png";
+    imwrite(path, img_r);
+  }
+
   // Initialize hash
   if (!hash_.isInitialized())
     hash_.init(query_.getDesc(), true);
@@ -181,6 +222,41 @@ int haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
   img_id_++;
 
   return query_.getId();
+}
+
+/** \brief Returns the hash for a some specific image id.
+  * @return true if hash found
+  * \param the image id.
+  * \param the returning hash.
+  */
+bool haloc::LoopClosure::getHash(int img_id, vector<float>& hash)
+{
+  hash.clear();
+  for (uint i=0; i<hash_table_.size(); i++)
+  {
+    if (hash_table_[i].first == img_id)
+    {
+      hash = hash_table_[i].second;
+      return true;
+    }
+  }
+  return false;
+}
+
+/** \brief Computes the hash matching between 2 images
+  * @return true if hashes found
+  * \param the image id a.
+  * \param the image id b.
+  * \param the returning hash matching.
+  */
+bool haloc::LoopClosure::hashMatching(int img_id_a, int img_id_b, float& matching)
+{
+  matching = -1.0;
+  vector<float> hash_a, hash_b;
+  if(!getHash(img_id_a, hash_a)) return false;
+  if(!getHash(img_id_b, hash_b)) return false;
+  matching = hash_.match(hash_a, hash_b);
+  return true;
 }
 
 /** \brief Get the best n_candidates to close loop with the last image.
@@ -333,7 +409,7 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
     // Log
     if(params_.verbose && best_lc_found != "")
     {
-      ROS_INFO_STREAM("[libhaloc:] No LC by hash, but best candidate is node " <<
+      ROS_INFO_STREAM("[libhaloc:] No LC by hash, best candidate is " <<
                       best_lc_found << " (matches: " << max_matches <<
                       "; inliers: " << max_inliers << ").");
     }
@@ -349,28 +425,31 @@ bool haloc::LoopClosure::getLoopClosure(int& lc_img_id,
   * \param current image id.
   * \param Return the transform between nodes if loop closure is valid.
   * \param Show output log or not.
+  * \param The number of matches
+  * \param The number of inliers
   */
-bool haloc::LoopClosure::getLoopClosure(string image_id_a,
-                                        string image_id_b,
+bool haloc::LoopClosure::getLoopClosure(int img_id_a,
+                                        int img_id_b,
                                         tf::Transform& trans,
+                                        int& matches,
+                                        int& inliers,
                                         bool logging)
 {
   // Image a
-  string file_a = params_.work_dir+"/"+image_id_a+".yml";
+  string file_a = params_.work_dir+"/"+lexical_cast<string>(img_id_a)+".yml";
   Image img_a = getImage(file_a);
 
   // Image b
-  string file_b = params_.work_dir+"/"+image_id_b+".yml";
+  string file_b = params_.work_dir+"/"+lexical_cast<string>(img_id_b)+".yml";
   Image img_b = getImage(file_b);
 
   // Get the loop closing (if any)
-  int matches, inliers;
   bool valid = compute(img_a, img_b, matches, inliers, trans);
 
   // If valid loop closure, save it
   if (valid)
   {
-    lc_found_.push_back(make_pair(lexical_cast<int>(image_id_a), lexical_cast<int>(image_id_b)));
+    lc_found_.push_back(make_pair(img_id_a, img_id_b));
   }
 
   if(params_.verbose && logging)
@@ -378,19 +457,35 @@ bool haloc::LoopClosure::getLoopClosure(string image_id_a,
     if (valid)
     {
       ROS_INFO_STREAM("[libhaloc:] LC by ID between " <<
-                      image_id_a << " and " << image_id_b <<
+                      img_id_a << " and " << img_id_b <<
                       " (matches: " << matches << "; inliers: " <<
                       inliers << ").");
     }
     else
     {
       ROS_INFO_STREAM("[libhaloc:] No LC by ID between " <<
-                      image_id_a << " and " << image_id_b <<
+                      img_id_a << " and " << img_id_b <<
                       " (matches: " << matches << "; inliers: " <<
                       inliers << ").");
     }
   }
   return valid;
+}
+
+/** \brief Compute the loop closure (if any) between A -> B.
+  * @return true if valid loop closure, false otherwise.
+  * \param reference image id.
+  * \param current image id.
+  * \param Return the transform between nodes if loop closure is valid.
+  * \param Show output log or not.
+  */
+bool haloc::LoopClosure::getLoopClosure(int img_id_a,
+                                        int img_id_b,
+                                        tf::Transform& trans,
+                                        bool logging)
+{
+  int matches, inliers;
+  return getLoopClosure(img_id_a, img_id_b, trans, matches, inliers, logging);
 }
 
 /** \brief Compute the loop closure (if any).
@@ -431,21 +526,21 @@ bool haloc::LoopClosure::compute(Image query,
 
   matches = (int)desc_matches.size();
 
-  // Check matches size
+  // Matches threshold
   if (matches < params_.min_matches)
     return false;
 
   // Get the matched keypoints
-  vector<Point2f> query_kp = query.getKp();
-  vector<Point2f> candidate_kp = candidate.getKp();
+  vector<KeyPoint> query_kp = query.getKp();
+  vector<KeyPoint> candidate_kp = candidate.getKp();
   vector<Point3f> candidate_3d = candidate.get3D();
   vector<Point2f> query_matched_kp;
   vector<Point2f> candidate_matched_kp;
   vector<Point3f> candidate_matched_3d_points;
   for(int i=0; i<matches; i++)
   {
-    query_matched_kp.push_back(query_kp[desc_matches[i].trainIdx]);
-    candidate_matched_kp.push_back(candidate_kp[desc_matches[i].queryIdx]);
+    query_matched_kp.push_back(query_kp[desc_matches[i].trainIdx].pt);
+    candidate_matched_kp.push_back(candidate_kp[desc_matches[i].queryIdx].pt);
 
     // Only stereo
     if (candidate_3d.size() != 0)
@@ -479,9 +574,29 @@ bool haloc::LoopClosure::compute(Image query,
                    100, params_.max_reproj_err,
                    40, solvepnp_inliers);
 
+    // Inliers threshold
     inliers = (int)solvepnp_inliers.size();
     if (inliers < params_.min_inliers)
       return false;
+
+    // Save inliers matches
+    if (params_.save_images)
+    {
+      vector<DMatch> final_inliers;
+      for(int i=0; i<solvepnp_inliers.size(); i++)
+      {
+        int idx = solvepnp_inliers[i];
+        final_inliers.push_back(desc_matches[idx]);
+      }
+      Mat img_inliers;
+      string path_query = params_.image_dir + lexical_cast<string>(query.getId()) + "_l.png";
+      string path_candidate = params_.image_dir + lexical_cast<string>(candidate.getId()) + "_l.png";
+      string output = params_.image_dir + "inliers_" + lexical_cast<string>(query.getId()) + "_" + lexical_cast<string>(candidate.getId()) + ".png";
+      Mat img_query = imread(path_query, CV_LOAD_IMAGE_COLOR);
+      Mat img_candidate = imread(path_candidate, CV_LOAD_IMAGE_COLOR);
+      drawMatches(img_candidate, candidate_kp, img_query, query_kp, final_inliers, img_inliers);
+      imwrite(output, img_inliers);
+    }
 
     trans = haloc::Utils::buildTransformation(rvec, tvec);
   }
@@ -730,13 +845,14 @@ haloc::Image haloc::LoopClosure::getImage(string img_file)
   if (!fs.isOpened())
     ROS_ERROR("[Haloc:] ERROR -> Failed to open the image keypoints and descriptors.");
   int id;
-  vector<Point2f> kp;
+  vector<KeyPoint> kp;
   Mat desc;
   vector<Point3f> p3d;
   fs["id"] >> id;
-  fs["kp"] >> kp;
   fs["desc"] >> desc;
   fs["threed"] >> p3d;
+  FileNode kp_node = fs["kp"];
+  read(kp_node, kp);
   fs.release();
 
   // Set the properties of the image

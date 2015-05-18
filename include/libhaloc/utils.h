@@ -213,13 +213,69 @@ public:
     * \param right_point on the right image
     * \param world_point pointer to the corresponding 3d point
     */
-  static void calculate3DPoint(const image_geometry::StereoCameraModel stereo_camera_model,
+  static bool calculate3DPoint(const image_geometry::StereoCameraModel stereo_camera_model,
                                const Point2d& left_point,
                                const Point2d& right_point,
+                               double max_proj_err,
                                Point3d& world_point)
   {
+    // Get the world point
     double disparity = left_point.x - right_point.x;
     stereo_camera_model.projectDisparityTo3d(left_point, disparity, world_point);
+
+    // Filter the given world point
+    // Extract camera parameters
+    double fx_l = stereo_camera_model.left().fx();
+    double fy_l = stereo_camera_model.left().fy();
+    double cx_l = stereo_camera_model.left().cx();
+    double cy_l = stereo_camera_model.left().cy();
+    double tx_l = stereo_camera_model.left().Tx();
+    double ty_l = stereo_camera_model.left().Ty();
+
+    double fx_r = stereo_camera_model.right().fx();
+    double fy_r = stereo_camera_model.right().fy();
+    double cx_r = stereo_camera_model.right().cx();
+    double cy_r = stereo_camera_model.right().cy();
+    double tx_r = stereo_camera_model.right().Tx();
+    double ty_r = stereo_camera_model.right().Ty();
+
+    double baseline = stereo_camera_model.baseline();
+
+    // Direccion vectors
+    double x_l = (1.0/fx_l) * (left_point.x - cx_l);
+    double y_l = (1.0/fy_l) * (left_point.y - cy_l);
+    double z_l = 1.0;
+
+    double x_r = (1.0/fx_r) * (right_point.x - cx_r);
+    double y_r = (1.0/fy_r) * (right_point.y - cy_r);
+    double z_r = 1.0;
+
+    tf::Vector3 u(x_l, y_l, z_l);
+    tf::Vector3 v(x_r, y_r, z_r);
+    tf::Vector3 w0(-baseline, 0.0, 0.0);
+
+    // Origins
+    tf::Vector3 l0(0.0, 0.0, 0.0);
+    tf::Vector3 r0(baseline, 0.0, 0.0);
+
+    // Temporal variables
+    double a = u.dot(u);
+    double b = u.dot(v);
+    double c = v.dot(v);
+    double d = u.dot(w0);
+    double e = v.dot(w0);
+
+    // Minimum distance between the two projected points
+    tf::Vector3 dv = (l0-r0) + ( ( (b*e-c*d)*u - (a*e-b*d)*v ) / (a*c - b*b) );
+    double dist = sqrt( dv.x()*dv.x() + dv.y()*dv.y() + dv.z()*dv.z() );
+    if (dist > max_proj_err)
+    {
+      return false;
+    }
+    else
+    {
+      return true;
+    }
   }
 
   /** \brief Sort 2 matchings by value
@@ -230,6 +286,16 @@ public:
   static bool sortByMatching(const pair<int, float> d1, const pair<int, float> d2)
   {
     return (d1.second < d2.second);
+  }
+
+  /** \brief Sort 2 descriptors matchings by distance
+    * @return true if vector 1 is smaller than vector 2
+    * \param descriptor matching 1
+    * \param descriptor matching 2
+    */
+  static bool sortDescByDistance(const DMatch& d1, const DMatch& d2)
+  {
+    return (d1.distance < d2.distance);
   }
 
   /** \brief Sort 2 matchings by likelihood

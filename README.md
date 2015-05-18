@@ -7,6 +7,13 @@ The image hashing implemented in this library is based on features (SIFT, SURF, 
 
 The library works for both mono and stereo datasets and provides a transformation (2d for mono and 3d for stereo) when loop closures are found.
 
+
+Dependencies
+-------
+VLFEAT (only for the evaluation tool)
+https://github.com/srv/libvlfeat
+
+
 How it works
 -------
 
