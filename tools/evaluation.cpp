@@ -187,7 +187,7 @@ class EvaluationNode
       ROS_INFO_STREAM("[Haloc:] Number of processed descriptors: "  << all_descriptors.rows);
 
       // Save BoW
-      shutdown();
+      saveBoW();
 
       // VLAD clustering initialization
       ROS_INFO("[Haloc:] VLAD clustering...");
@@ -216,6 +216,13 @@ class EvaluationNode
       // VLAD clustering
       vl_kmeans_cluster(kmeans_, data, dimension_, num_data, num_centers_);
       ROS_INFO("[Haloc:] VLAD clustering completed!");
+
+      // Learning the PCA
+      ROS_INFO("[Haloc:] VLAD learning PCA...");
+      PCA p_tmp(all_descriptors, Mat(), CV_PCA_DATA_AS_ROW, 2);
+      p_ = p_tmp;
+      ROS_INFO_STREAM("[Haloc:] PCA learned with " << p_.eigenvectors.size() << " eigenvectors!");
+
     }
 
     // Openfabmap running stage
@@ -422,19 +429,22 @@ class EvaluationNode
         Mat enc_mat = cv::Mat(dimension_, num_centers_, CV_32F, enc);
         transpose(enc_mat, enc_mat);
 
+        // Projection reduction
+        Mat enc_mat_proj = p_.project(enc_mat);
+
         // Store for future comparisons
-        map_vlad[image_id] = enc_mat;
+        map_vlad[image_id] = enc_mat_proj;
 
         // Search for loop closures
         vector< pair<int,float> > vlad_candidates;
         for (int i=0; i<(image_id - min_neighbor_-1); i++)
         {
           float msquared = 0.0;
-          for(int j=0; j<enc_mat.rows; j++)
+          for(int j=0; j<enc_mat_proj.rows; j++)
           {
             float scalar_p = 0.0;
-            for(int d=0; d<enc_mat.cols; d++)
-              scalar_p += enc_mat.at<float>(j,d) * map_vlad[i].at<float>(j,d);
+            for(int d=0; d<enc_mat_proj.cols; d++)
+              scalar_p += enc_mat_proj.at<float>(j,d) * map_vlad[i].at<float>(j,d);
             msquared += scalar_p;
           }
           vlad_candidates.push_back(make_pair(i, msquared));
@@ -455,7 +465,7 @@ class EvaluationNode
         cout << "VLAD IMAGES [ ";
         for (int i=0; i<vlad_matchings.size();i++)
           cout << vlad_matchings[i] << " ";
-        cout << "]   \t \t \t"  << vlad_time.toSec() << " sec." << endl;
+        cout << "]   \t"  << vlad_time.toSec() << " sec." << endl;
 
 
 
@@ -597,9 +607,10 @@ class EvaluationNode
     VlKMeans *kmeans_;
     int min_neighbor_;
     int n_candidates_;
+    PCA p_;
 
     // Finishes the learning stage
-    void shutdown()
+    void saveBoW()
     {
       ROS_INFO("[Haloc:] Clustering to produce vocabulary");
       vocab_ = trainer_.cluster();
