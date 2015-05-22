@@ -7,6 +7,7 @@
 #include <boost/filesystem.hpp>
 #include <fstream>
 #include <numeric>
+#include <signal.h>
 #include "libhaloc/lc.h"
 
 // vlfeat library
@@ -22,6 +23,20 @@ namespace fs=boost::filesystem;
 using namespace std;
 using namespace cv;
 
+
+// Stop handler binding
+boost::function<void(int)> stopHandlerCb;
+
+/** \brief Catches the Ctrl+C signal.
+  */
+void stopHandler(int s)
+{
+  printf("Caught signal %d\n",s);
+  stopHandlerCb(s);
+  ros::shutdown();
+}
+
+
 class EvaluationNode
 {
 
@@ -32,9 +47,14 @@ class EvaluationNode
     string running_dir_;
     haloc::LoopClosure lc_;
     string output_file_;
+    string runtime_file_;
 
     // Class constructor
-    EvaluationNode() : nhp_("~") {}
+    EvaluationNode() : nhp_("~")
+    {
+      // Bind the finalize member to stopHandler signal
+      stopHandlerCb = std::bind1st(std::mem_fun(&EvaluationNode::finalize), this);
+    }
 
     // Read node parameters
     void readParameters()
@@ -69,6 +89,7 @@ class EvaluationNode
       nhp_.param<int>("maxrep", maxrep, 1);
       nhp_.param<int>("ntrees", ntrees, 1);
       nhp_.param<int>("maxcomp", maxcomp, 100);
+      nhp_.param<int>("num_proj_vlad", num_proj_vlad_, 1);
       dimension_ = dimension;
       num_centers_ = num_centers;
       maxiter_ = maxiter;
@@ -85,13 +106,17 @@ class EvaluationNode
       nhp_.param<int>("num_proj", lc_params.num_proj, 2);
       nhp_.param<int>("min_neighbor", lc_params.min_neighbor, 1);
       nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
+      nhp_.param<int>("min_matches", lc_params.min_matches, 20);
+      nhp_.param<int>("min_inliers", lc_params.min_inliers, 12);
       min_neighbor_ = lc_params.min_neighbor;
       n_candidates_ = lc_params.n_candidates;
       lc_.setParams(lc_params);
 
       // Output file
       output_file_ = lc_params.work_dir + "/output.txt";
+      runtime_file_ = lc_params.work_dir + "/runtime.txt";
       remove(output_file_.c_str());
+      remove(runtime_file_.c_str());
     }
 
     // Initialize the node
@@ -187,14 +212,14 @@ class EvaluationNode
       ROS_INFO_STREAM("[Haloc:] Number of processed descriptors: "  << all_descriptors.rows);
 
       // Save BoW
-      saveBoW();
+      //saveBoW();
 
       // VLAD clustering initialization
       ROS_INFO("[Haloc:] VLAD clustering...");
       VlVectorComparisonType distance = VlDistanceL2;
       VlKMeansAlgorithm algorithm = VlKMeansLloyd;
       vl_size num_data = all_descriptors.rows;
-      kmeans_ = vl_kmeans_new (VL_TYPE_FLOAT, distance);
+      kmeans_ = vl_kmeans_new(VL_TYPE_FLOAT, distance);
       float *data = new float[dimension_ * num_data];
 
       // Re-format the data matrix
@@ -215,11 +240,12 @@ class EvaluationNode
 
       // VLAD clustering
       vl_kmeans_cluster(kmeans_, data, dimension_, num_data, num_centers_);
+      vl_kmeans_get_centers(kmeans_);
       ROS_INFO("[Haloc:] VLAD clustering completed!");
 
       // Learning the PCA
       ROS_INFO("[Haloc:] VLAD learning PCA...");
-      PCA p_tmp(all_descriptors, Mat(), CV_PCA_DATA_AS_ROW, 2);
+      PCA p_tmp(all_descriptors, Mat(), CV_PCA_DATA_AS_ROW, num_proj_vlad_);
       p_ = p_tmp;
       ROS_INFO_STREAM("[Haloc:] PCA learned with " << p_.eigenvectors.size() << " eigenvectors!");
 
@@ -289,8 +315,6 @@ class EvaluationNode
 
         cout << endl << endl;
         ROS_INFO_STREAM("++++++++++++++++++++++ " << image_id << " ++++++++++++++++++++++");
-
-
 
 
         // HALOC ---------------------------------------
@@ -397,9 +421,8 @@ class EvaluationNode
 
 
         // VLAD ----------------------------------
-        kpts.clear();
         Mat descriptors;
-        detector_->detect(img, kpts);
+        // Use same kpts as BoW
         extractor_->compute(img, kpts, descriptors);
 
         // Initialize and re-format input data
@@ -415,7 +438,7 @@ class EvaluationNode
 
         // Find nearest cluster centers for the data that should be encoded
         ros::WallTime vlad_start = ros::WallTime::now();
-        vl_kmeans_quantize(kmeans_, indexes, distances, desc_to_encode ,num_data_to_encode);
+        vl_kmeans_quantize(kmeans_, indexes, distances, desc_to_encode, num_data_to_encode);
         float *assignments = new float[num_data_to_encode * num_centers_];
         std::fill_n(assignments, num_data_to_encode * num_centers_, 0);
         for(int i=0; i<num_data_to_encode; i++)
@@ -424,7 +447,6 @@ class EvaluationNode
         // Variable "enc" will store the vlad global descriptor
         float *enc = new float[dimension_ * num_centers_];
         std::fill_n(enc, dimension_ * num_centers_ , 0);
-        vl_kmeans_get_centers(kmeans_);
         vl_vlad_encode(enc, VL_TYPE_FLOAT, kmeans_->centers, dimension_, num_centers_, desc_to_encode, num_data_to_encode, assignments, 0) ;
         Mat enc_mat = cv::Mat(dimension_, num_centers_, CV_32F, enc);
         transpose(enc_mat, enc_mat);
@@ -442,12 +464,18 @@ class EvaluationNode
           float msquared = 0.0;
           for(int j=0; j<enc_mat_proj.rows; j++)
           {
+            /*
             float scalar_p = 0.0;
             for(int d=0; d<enc_mat_proj.cols; d++)
               scalar_p += enc_mat_proj.at<float>(j,d) * map_vlad[i].at<float>(j,d);
             msquared += scalar_p;
+            */
+            float scalar_p = 0.0;
+            for(int d=0; d<enc_mat_proj.cols; d++)
+              scalar_p += (enc_mat_proj.at<float>(j,d) - map_vlad[i].at<float>(j,d)) * (enc_mat_proj.at<float>(j,d) - map_vlad[i].at<float>(j,d));
+            msquared += scalar_p;
           }
-          vlad_candidates.push_back(make_pair(i, msquared));
+          vlad_candidates.push_back(make_pair(i, sqrt(msquared)));
         }
 
         vector<int> vlad_matchings;
@@ -485,6 +513,43 @@ class EvaluationNode
             }
           }
           cout << "]" << endl;
+        }
+        else
+        {
+          // No ground truth, validate the candidates
+
+          // HALOC
+          for (uint i=0; i<hash_matching.size(); i++)
+          {
+            tf::Transform tmp;
+            if(lc_.getLoopClosure(image_id, hash_matching[i].first, tmp))
+            {
+              current_gt.push_back(hash_matching[i].first);
+              break;
+            }
+          }
+
+          // BoW
+          for (uint i=0; i<matched_to_img_seq.size(); i++)
+          {
+            tf::Transform tmp;
+            if(lc_.getLoopClosure(image_id, matched_to_img_seq[i], tmp))
+            {
+              current_gt.push_back(matched_to_img_seq[i]);
+              break;
+            }
+          }
+
+          // VLAD
+          for (uint i=0; i<vlad_matchings.size(); i++)
+          {
+            tf::Transform tmp;
+            if(lc_.getLoopClosure(image_id, vlad_matchings[i], tmp))
+            {
+              current_gt.push_back(vlad_matchings[i]);
+              break;
+            }
+          }
         }
 
 
@@ -551,16 +616,23 @@ class EvaluationNode
           f_output << fixed << setprecision(9) <<
                 haloc_idx  << "," <<
                 openfabmap_idx << "," <<
-                vlad_idx << "," <<
-                haloc_time.toSec() << "," <<
-                bow_time.toSec() << "," <<
-                vlad_time.toSec() <<  endl;
+                vlad_idx <<  endl;
           f_output.close();
         }
+
+        // Save runtime
+        fstream f_runtime(runtime_file_.c_str(), ios::out | ios::app);
+        f_runtime << fixed << setprecision(9) <<
+              haloc_time.toSec() << "," <<
+              bow_time.toSec() << "," <<
+              vlad_time.toSec() <<  endl;
+        f_runtime.close();
 
         // Next directory entry
         it++;
       }
+
+      lc_.finalize();
     }
 
   private:
@@ -607,6 +679,7 @@ class EvaluationNode
     VlKMeans *kmeans_;
     int min_neighbor_;
     int n_candidates_;
+    int num_proj_vlad_;
     PCA p_;
 
     // Finishes the learning stage
@@ -703,7 +776,15 @@ class EvaluationNode
     // Sort vectors by distance
     static bool sortBydistance(const pair<int,float> p1, const pair<int,float> p2)
     {
-      return (p1.second > p2.second);
+      return (p1.second < p2.second);
+    }
+
+    // Finalize
+    void finalize(int s)
+    {
+      ROS_INFO("[Haloc:] Finalizing...");
+      lc_.finalize();
+      ROS_INFO("[Haloc:] Done!");
     }
 };
 
@@ -746,9 +827,6 @@ int main(int argc, char** argv)
     // Run
     node.run();
   }
-
-  // Stop libhaloc
-  node.lc_.finalize();
 
   ros::spin();
   return 0;
