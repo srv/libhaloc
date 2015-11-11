@@ -298,6 +298,16 @@ public:
     return (d1.distance < d2.distance);
   }
 
+  /** \brief Sort 2 keypoints by its response
+    * @return true if response of kp 1 is greater than response of kp 2
+    * \param likelihood 1
+    * \param likelihood 2
+    */
+  static bool sortByResponse(const KeyPoint kp1, const KeyPoint kp2)
+  {
+    return (kp1.response > kp2.response);
+  }
+
   /** \brief Sort 2 matchings by likelihood
     * @return true if likelihood 1 is greater than likelihood 2
     * \param likelihood 1

@@ -1,755 +1,397 @@
-/* All openfabmap related functions thanks to https://code.google.com/p/cyphy-vis-slam/
- */
-
 #include <ros/ros.h>
-#include <opencv2/opencv.hpp>
-#include <opencv2/nonfree/features2d.hpp>
-#include <boost/filesystem.hpp>
-#include <fstream>
+#include <ros/package.h>
 #include <numeric>
-#include "libhaloc/lc.h"
+#include <cv_bridge/cv_bridge.h>
+#include <opencv2/opencv.hpp>
+#include <opencv2/features2d/features2d.hpp>
+#include <opencv2/nonfree/features2d.hpp>
+#include <opencv2/nonfree/nonfree.hpp>
+#include <iostream>
+#include <stdlib.h>
+#include <fstream>
+#include <sstream>
+#include <string>
+#include <boost/filesystem.hpp>
+#include <boost/lexical_cast.hpp>
 
-// vlfeat library
-#include <kmeans.h>
-#include <host.h>
-#include <kdtree.h>
-#include <vlad.h>
-#include <vector>
-
-
-namespace fs=boost::filesystem;
+#include "libhaloc/simple_hash.h"
+#include "libhaloc/utils.h"
 
 using namespace std;
-using namespace cv;
+using namespace boost;
 
-class EvaluationNode
+namespace fs=filesystem;
+
+class Haloc
 {
+  haloc::SimpleHash hash_;
+  vector< pair<int, vector<float> > > hash_table_;
+  string execution_dir_;
 
   public:
+  Haloc(string input_img_dir)
+  {
+    string img_dir = input_img_dir;
 
-    // Public parameters
-    string training_dir_;
-    string running_dir_;
-    haloc::LoopClosure lc_;
-    string output_file_;
+    // Init
+    execution_dir_ = ros::package::getPath("libhaloc") + "/" + "haloc";
+    if (fs::is_directory(execution_dir_))
+      fs::remove_all(execution_dir_);
+    fs::path dir1(execution_dir_);
+    if (!fs::create_directory(dir1))
+      ROS_ERROR("[Localization:] ERROR -> Impossible to create the loop_closing directory.");
 
-    // Class constructor
-    EvaluationNode() : nhp_("~") {}
-
-    // Read node parameters
-    void readParameters()
-    {
-      // Directories
-      nhp_.param("training_dir", training_dir_, string(""));
-      nhp_.param("running_dir", running_dir_, string(""));
-      nhp_.param<string>("vocab_path", vocab_path_, "vocab.yml");
-      nhp_.param<string>("cl_tree_path", cl_tree_path_, "clTree.yml");
-      nhp_.param<string>("trainbows_path", trainbows_path_, "trainbows.yml");
-      nhp_.param<string>("gt_file", gt_file_, std::string(""));
-
-      // BoW training parameters
-      nhp_.param<int>("max_images", max_images_, 90);
-      nhp_.param<double>("cluster_size", cluster_size_, 320.0);
-      nhp_.param<double>("lower_information_bound", lower_information_bound_, 0.0);
-      nhp_.param<int>("min_descriptor_count", min_descriptor_count_, 40);
-
-      // BoW run parameters
-      nhp_.param<int>("max_matches", max_matches_, 0);
-      nhp_.param<double>("min_match_value", min_match_value_, 0.0);
-      nhp_.param<bool>("disable_self_match", disable_self_match_, false);
-      nhp_.param<int>("self_match_window", self_match_window_, 1);
-      nhp_.param<bool>("disable_unknown_match", disable_unknown_match_, false);
-      nhp_.param<bool>("add_only_new_places", add_only_new_places_, false);
-
-      // VLAD parameters
-      int dimension, num_centers, maxiter, maxcomp, maxrep, ntrees;
-      nhp_.param<int>("dimension", dimension, 128);
-      nhp_.param<int>("num_centers", num_centers, 64);
-      nhp_.param<int>("maxiter", maxiter, 10);
-      nhp_.param<int>("maxrep", maxrep, 1);
-      nhp_.param<int>("ntrees", ntrees, 1);
-      nhp_.param<int>("maxcomp", maxcomp, 100);
-      dimension_ = dimension;
-      num_centers_ = num_centers;
-      maxiter_ = maxiter;
-      maxrep_ = maxrep;
-      ntrees_ = ntrees;
-      maxcomp_ = maxcomp;
-
-      // Libhaloc
-      haloc::LoopClosure::Params lc_params;
-      nhp_.param("work_dir", lc_params.work_dir, string(""));
-      nhp_.param("desc_type", lc_params.desc_type, string("SIFT"));
-      nhp_.param("desc_matching_type", lc_params.desc_matching_type, string("CROSSCHECK"));
-      nhp_.param<double>("desc_thresh_ratio", lc_params.desc_thresh_ratio, 0.7);
-      nhp_.param<int>("num_proj", lc_params.num_proj, 2);
-      nhp_.param<int>("min_neighbor", lc_params.min_neighbor, 1);
-      nhp_.param<int>("n_candidates", lc_params.n_candidates, 10);
-      min_neighbor_ = lc_params.min_neighbor;
-      n_candidates_ = lc_params.n_candidates;
-      lc_.setParams(lc_params);
-
-      // Output file
-      output_file_ = lc_params.work_dir + "/output.txt";
-      remove(output_file_.c_str());
-    }
-
-    // Initialize the node
-    void init()
-    {
-      // Feature tools
-      detector_ = new SIFT();
-      extractor_ = new SIFT();
-      matcher_ = new FlannBasedMatcher();
-      bide_ = new BOWImgDescriptorExtractor(extractor_, matcher_);
-
-      // BoW trainer
-      trainer_ = of2::BOWMSCTrainer(cluster_size_);
-
-      // Initialize for the first to contain
-      // - Match to current
-      // - Match to nothing
-      confusion_mat_ = Mat::zeros(2,2,CV_64FC1);
-
-      // Libhaloc
-      lc_.init();
-    }
-
-    // Openfabmap learning stage
-    void training()
-    {
-      // Sort directory of images
-      typedef std::vector<fs::path> vec;
-      vec v;
-      copy(
-        fs::directory_iterator(training_dir_),
+    // Sort directory of images
+    typedef std::vector<fs::path> vec;
+    vec v;
+    copy(
+        fs::directory_iterator(img_dir),
         fs::directory_iterator(),
         back_inserter(v)
-      );
-      sort(v.begin(), v.end());
-      vec::const_iterator it(v.begin());
+        );
 
-      // Store all the descriptors to compute the cluster size
-      Mat all_descriptors;
+    sort(v.begin(), v.end());
+    vec::const_iterator it(v.begin());
 
-      // Iterate over all images
-      int train_count = 0;
-      while (it!=v.end())
+    ostringstream output_csv;
+
+    int id = 0;
+    int lc = 0;
+
+    // Iterate over all images
+    while (it!=v.end())
+    {
+      // Check if the directory entry is an directory.
+      if (!fs::is_directory(*it))
       {
-        if (fs::is_directory(*it))
-        {
-          // Next directory entry and continue
-          it++;
-          continue;
-        }
+        // Get filename
+        string filename = it->filename().string();
+        int lastindex = filename.find_last_of(".");
+        string rawname = filename.substr(0, lastindex);
 
         // Read image
-        string filename = it->filename().string();
-        string path = training_dir_ + "/" + filename;
-        Mat img = imread(path, CV_LOAD_IMAGE_COLOR);
+        string path = img_dir + "/" + filename;
+        cv::Mat img_cur = cv::imread(path, CV_LOAD_IMAGE_COLOR);
 
-        ROS_INFO("[Haloc:] Detect.");
-        vector<KeyPoint> kpts;
-        detector_->detect(img, kpts);
-        ROS_INFO("[Haloc:] Extract.");
-        Mat descriptors;
-        extractor_->compute(img, kpts, descriptors);
+        // Extract kp
+        vector<cv::KeyPoint> tmp_kp;
+        cv::ORB orb(1500, 1.2, 8, 10, 0, 2, 0, 10);
+        orb(img_cur, cv::noArray(), tmp_kp, cv::noArray(), false);
 
-        // Store the descriptors
-        for (int i = 1; i < descriptors.rows; i++)
+        // Bucket kp
+        vector<cv::KeyPoint> q_kp = hash_.bucketFeatures(tmp_kp);
+
+        // Extract descriptors
+        cv::Mat q_desc;
+        cv::Ptr<cv::DescriptorExtractor> cv_extractor;
+        cv::initModule_nonfree();
+        cv_extractor = cv::DescriptorExtractor::create("SIFT");
+        cv_extractor->compute(img_cur, q_kp, q_desc);
+
+        // Initialize hash
+        if (!hash_.isInitialized())
+          hash_.init(q_desc);
+
+        // Save hash to table
+        vector<float> q_hash = hash_.getHash(q_desc);
+        hash_table_.push_back(make_pair(id, q_hash));
+
+        // Store
+        cv::FileStorage fs(execution_dir_+"/"+lexical_cast<string>(id)+".yml", cv::FileStorage::WRITE);
+        write(fs, "desc", q_desc);
+        fs.release();
+
+        // Get the candidate to close loop
+        vector< pair<int,float> > candidates;
+        getCandidates(id, candidates);
+
+        if (candidates.size() > 0)
         {
-          all_descriptors.push_back(descriptors.row(i));
-        }
+          // Read the descriptors of the first candidate
+          cv::Mat c_desc = readDesc(candidates[0].first);
 
-        // Check if frame was useful
-        if (!descriptors.empty() && kpts.size() > min_descriptor_count_)
-        {
-          trainer_.add(descriptors);
-          train_count++;
-          ROS_INFO_STREAM("[Haloc:] Added to trainer" << " (" << train_count << " / " << max_images_ << ").");
+          // Read the descriptors of the candidate
+          Mat match_mask;
+          vector<DMatch> matches;
+          haloc::Utils::crossCheckThresholdMatching(q_desc,
+              c_desc, 0.8, match_mask, matches);
 
-          // Add the frame to the sample pile
-          frames_sampled_.push_back(path);
-        }
-        else
-        {
-          ROS_DEBUG("[Haloc:] Image not descriptive enough, ignoring.");
-        }
-
-        if ((!(train_count < max_images_) && max_images_ > 0))
-        {
-          break;
-        }
-
-        // Next directory entry
-        it++;
-      }
-      ROS_INFO_STREAM("[Haloc:] Number of processed descriptors: "  << all_descriptors.rows);
-
-      // Save BoW
-      saveBoW();
-
-      // VLAD clustering initialization
-      ROS_INFO("[Haloc:] VLAD clustering...");
-      VlVectorComparisonType distance = VlDistanceL2;
-      VlKMeansAlgorithm algorithm = VlKMeansLloyd;
-      vl_size num_data = all_descriptors.rows;
-      kmeans_ = vl_kmeans_new (VL_TYPE_FLOAT, distance);
-      float *data = new float[dimension_ * num_data];
-
-      // Re-format the data matrix
-      vl_size data_idx, d;
-      for(data_idx=0; data_idx<num_data; data_idx++) {
-        for(d=0; d<dimension_; d++) {
-          data[data_idx*dimension_+d] = all_descriptors.at<float>(data_idx, d);
-        }
-      }
-
-      // kmeans settings
-      vl_kmeans_set_verbosity(kmeans_, 1);
-      vl_kmeans_set_max_num_iterations(kmeans_, maxiter_);
-      vl_kmeans_set_max_num_comparisons(kmeans_, maxcomp_);
-      vl_kmeans_set_num_repetitions(kmeans_, maxrep_);
-      vl_kmeans_set_num_trees(kmeans_, ntrees_);
-      vl_kmeans_set_algorithm(kmeans_, algorithm);
-
-      // VLAD clustering
-      vl_kmeans_cluster(kmeans_, data, dimension_, num_data, num_centers_);
-      ROS_INFO("[Haloc:] VLAD clustering completed!");
-
-      // Learning the PCA
-      ROS_INFO("[Haloc:] VLAD learning PCA...");
-      PCA p_tmp(all_descriptors, Mat(), CV_PCA_DATA_AS_ROW, 2);
-      p_ = p_tmp;
-      ROS_INFO_STREAM("[Haloc:] PCA learned with " << p_.eigenvectors.size() << " eigenvectors!");
-
-    }
-
-    // Openfabmap running stage
-    void run()
-    {
-      // Load trained data
-      loadCodebook();
-
-      // Sort directory of images
-      typedef std::vector<fs::path> vec;
-      vec v;
-      copy(
-        fs::directory_iterator(running_dir_),
-        fs::directory_iterator(),
-        back_inserter(v)
-      );
-      sort(v.begin(), v.end());
-      vec::const_iterator it(v.begin());
-
-      // Read the ground truth file
-      vector< vector<int> > ground_truth;
-      if (!gt_file_.empty())
-      {
-        ifstream in(gt_file_.c_str());
-        if (!in) ROS_ERROR("[Haloc:] Ground truth file does not exist.");
-        for (uint x=0; x<v.size(); x++)
-        {
-          vector<int> row;
-          for (uint y=0; y<v.size(); y++)
+          if (id == 251)
           {
-            int num;
-            in >> num;
-            row.push_back(num);
-          }
-          ground_truth.push_back(row);
-        }
-        in.close();
-      }
+            ROS_INFO_STREAM("KKKKK: " << candidates[0].first << " - " << matches.size());
 
-      // Initialization
-      int image_id = -1;
-      bool first_frame = true;
-      vector<int> to_img_seq;
-
-      // Set of correspondences image <--> VLAD matrix
-      std:map<int, Mat> map_vlad;
-
-      // Iterate over all images
-      while (it!=v.end())
-      {
-
-        if (fs::is_directory(*it))
-        {
-          // Next directory entry and continue
-          it++;
-          continue;
-        }
-
-        // Read image
-        string filename = it->filename().string();
-        string path = running_dir_ + "/" + filename;
-        Mat img = imread(path, CV_LOAD_IMAGE_COLOR);
-        image_id++;
-
-        cout << endl << endl;
-        ROS_INFO_STREAM("++++++++++++++++++++++ " << image_id << " ++++++++++++++++++++++");
-
-
-
-
-        // HALOC ---------------------------------------
-        lc_.setNode(img);
-        vector< pair<int,float> > hash_matching;
-        ros::WallTime haloc_start = ros::WallTime::now();
-        lc_.getCandidates(hash_matching);
-        ros::WallDuration haloc_time = ros::WallTime::now() - haloc_start;
-        cout << "HALOC IMAGES [ ";
-        for (int i=0; i<hash_matching.size();i++)
-          cout << hash_matching[i].first << " ";
-        cout << "]   \t"  << haloc_time.toSec() << " sec." << endl;
-        cout << "HALOC PROB [ ";
-        for (int i=0; i<hash_matching.size();i++)
-          cout << round(hash_matching[i].second*100)/100 << " ";
-        cout << "]" << endl;
-
-
-
-        // OPENFABMAP ----------------------------------
-        Mat bow;
-        vector<KeyPoint> kpts;
-        detector_->detect(img, kpts);
-        bide_->compute(img, kpts, bow);
-
-        vector<int> matched_to_img_seq;
-        vector<double> matched_to_img_match;
-
-        // Check if the frame could be described
-        ros::WallTime bow_start = ros::WallTime::now();
-        if (!bow.empty() && kpts.size() > min_descriptor_count_)
-        {
-          // IF NOT the first frame processed
-          if (!first_frame)
-          {
-            vector<of2::IMatch> matches;
-
-            // Find match likelyhoods for this 'bow'
-            fabMap_->compare(bow, matches, !add_only_new_places_);
-
-            // Sort matches with overloaded '<' into
-            // Ascending 'match' order
-            sort(matches.begin(), matches.end());
-
-            // Add BOW
-            if (add_only_new_places_)
+            // Save the query descriptors
+            ostringstream query_desc_csv;
+            for (int n=0; n<q_desc.rows; n++)
             {
-              // Check if fabMap believes this to be a new place
-              if (matches.back().imgIdx == -1)
+              for (int m=0; m<q_desc.cols; m++)
+                query_desc_csv << q_desc.at<float>(n, m) << ",";
+              query_desc_csv.seekp(query_desc_csv.str().length()-1);
+              query_desc_csv << endl;
+            }
+            // Save to file
+            string out_q_desc_file = ros::package::getPath("libhaloc") + "/q_desc.txt";
+            fstream f_q_desc_file(out_q_desc_file.c_str(), ios::out | ios::trunc);
+            f_q_desc_file << query_desc_csv.str();
+            f_q_desc_file.close();
+
+            // Save the candidate descriptors
+            ostringstream cand_desc_csv;
+            for (int n=0; n<c_desc.rows; n++)
+            {
+              for (int m=0; m<c_desc.cols; m++)
+                cand_desc_csv << c_desc.at<float>(n, m) << ",";
+              cand_desc_csv.seekp(cand_desc_csv.str().length()-1);
+              cand_desc_csv << endl;
+            }
+            // Save to file
+            string out_c1_desc_file = ros::package::getPath("libhaloc") + "/108_desc.txt";
+            fstream f_c1_desc_file(out_c1_desc_file.c_str(), ios::out | ios::trunc);
+            f_c1_desc_file << cand_desc_csv.str();
+            f_c1_desc_file.close();
+
+            // Save the candidate descriptors
+            c_desc = readDesc(107);
+            ostringstream cand1_desc_csv;
+            for (int n=0; n<c_desc.rows; n++)
+            {
+              for (int m=0; m<c_desc.cols; m++)
+                cand1_desc_csv << c_desc.at<float>(n, m) << ",";
+              cand1_desc_csv.seekp(cand1_desc_csv.str().length()-1);
+              cand1_desc_csv << endl;
+            }
+            // Save to file
+            string out_c2_desc_file = ros::package::getPath("libhaloc") + "/107_desc.txt";
+            fstream f_c2_desc_file(out_c2_desc_file.c_str(), ios::out | ios::trunc);
+            f_c2_desc_file << cand1_desc_csv.str();
+            f_c2_desc_file.close();
+            return;
+          }
+
+          // Is it a possible loop?
+          if (matches.size() > 40)
+          {
+
+            // Log
+            ROS_INFO_STREAM(id << " to " << candidates[0].first << ": " << matches.size());
+
+            /*
+            // Save the query descriptors
+            ostringstream query_desc_csv;
+            for (int n=0; n<q_desc.rows; n++)
+            {
+              for (int m=0; m<q_desc.cols; m++)
+                query_desc_csv << q_desc.at<float>(n, m) << ",";
+              query_desc_csv.seekp(query_desc_csv.str().length()-1);
+              query_desc_csv << endl;
+            }
+            // Save to file
+            string out_q_desc_file = ros::package::getPath("libhaloc") + "/q_desc.txt";
+            fstream f_q_desc_file(out_q_desc_file.c_str(), ios::out | ios::trunc);
+            f_q_desc_file << query_desc_csv.str();
+            f_q_desc_file.close();
+
+            // Save the candidate descriptors
+            ostringstream cand_desc_csv;
+            for (int n=0; n<c_desc.rows; n++)
+            {
+              for (int m=0; m<c_desc.cols; m++)
+                cand_desc_csv << c_desc.at<float>(n, m) << ",";
+              cand_desc_csv.seekp(cand_desc_csv.str().length()-1);
+              cand_desc_csv << endl;
+            }
+            // Save to file
+            string out_c1_desc_file = ros::package::getPath("libhaloc") + "/lc_desc.txt";
+            fstream f_c1_desc_file(out_c1_desc_file.c_str(), ios::out | ios::trunc);
+            f_c1_desc_file << cand_desc_csv.str();
+            f_c1_desc_file.close();
+
+            // Save matches indices
+            ostringstream matches_q2lc;
+            for (uint i=0; i<matches.size(); i++)
+              matches_q2lc << matches[i].queryIdx << "," << matches[i].trainIdx << endl;
+            // Save to file
+            string out_q2lc_file = ros::package::getPath("libhaloc") + "/matches_q2lc.txt";
+            fstream f_q2lc_file(out_q2lc_file.c_str(), ios::out | ios::trunc);
+            f_q2lc_file << matches_q2lc.str();
+            f_q2lc_file.close();
+
+            // Save hashes
+            ostringstream query_hash;
+            for (uint i=0; i<q_hash.size(); i++)
+              query_hash << q_hash[i] << endl;
+            // Save to file
+            string out_qh_file = ros::package::getPath("libhaloc") + "/query_hash.txt";
+            fstream f_qh_file(out_qh_file.c_str(), ios::out | ios::trunc);
+            f_qh_file << query_hash.str();
+            f_qh_file.close();
+
+            ostringstream lc_hash;
+            vector<float> c_hash = hash_table_[candidates[0].first].second;
+            for (uint i=0; i<c_hash.size(); i++)
+              lc_hash << c_hash[i] << endl;
+            // Save to file
+            string out_lch_file = ros::package::getPath("libhaloc") + "/lc_hash.txt";
+            fstream f_lch_file(out_lch_file.c_str(), ios::out | ios::trunc);
+            f_lch_file << lc_hash.str();
+            f_lch_file.close();
+            */
+
+            output_csv << matches.size() << "," << candidates[0].second << endl;
+            for (uint i=1; i<candidates.size(); i++)
+            {
+              c_desc = readDesc(candidates[i].first);
+              haloc::Utils::crossCheckThresholdMatching(q_desc,
+                  c_desc, 0.8, match_mask, matches);
+
+              /*
+              if (matches.size() < 5)
               {
-                ROS_WARN("[Haloc:] Adding bow of new place...");
-                fabMap_->add(bow);
+                // Save the descriptor matrix
+                ostringstream nolc_desc_csv;
+                for (int n=0; n<c_desc.rows; n++)
+                {
+                  for (int m=0; m<c_desc.cols; m++)
+                    nolc_desc_csv << c_desc.at<float>(n, m) << ",";
+                  nolc_desc_csv.seekp(nolc_desc_csv.str().length()-1);
+                  nolc_desc_csv << endl;
+                }
+                // Save to file
+                string out_c2_desc_file = ros::package::getPath("libhaloc") + "/no_lc_desc.txt";
+                fstream f_c2_desc_file(out_c2_desc_file.c_str(), ios::out | ios::trunc);
+                f_c2_desc_file << nolc_desc_csv.str();
+                f_c2_desc_file.close();
 
-                // Store the mapping to match ID
-                to_img_seq.push_back(image_id);
+                // Save matches indices
+                ostringstream matches_q2nolc;
+                for (uint j=0; i<matches.size(); j++)
+                  matches_q2nolc << matches[j].queryIdx << "," << matches[j].trainIdx << endl;
+                // Save to file
+                string out_q2nolc_file = ros::package::getPath("libhaloc") + "/matches_q2nolc.txt";
+                fstream f_q2nolc_file(out_q2nolc_file.c_str(), ios::out | ios::trunc);
+                f_q2nolc_file << matches_q2nolc.str();
+                f_q2nolc_file.close();
+
+                ostringstream nolc_hash;
+                c_hash = hash_table_[candidates[i].first].second;
+                for (uint j=0; j<c_hash.size(); j++)
+                  nolc_hash << c_hash[j] << endl;
+                // Save to file
+                string out_nolch_file = ros::package::getPath("libhaloc") + "/no_lc_hash.txt";
+                fstream f_nolch_file(out_nolch_file.c_str(), ios::out | ios::trunc);
+                f_nolch_file << nolc_hash.str();
+                f_nolch_file.close();
+
+                ROS_INFO_STREAM("NO LC: " << candidates[i].first);
+
+                return;
               }
+              */
+
+              output_csv << matches.size() << "," << candidates[i].second << endl;
             }
-            else
-            {
-              // Store the mapping to match ID
-              to_img_seq.push_back(image_id);
-            }
-
-            // Prepare in descending match likelihood order
-            int match_img_seq;
-            for (vector<of2::IMatch>::reverse_iterator match_iter = matches.rbegin(); match_iter != matches.rend(); ++match_iter)
-            {
-              // Limit the number of matches published (by 'maxMatches_' OR 'minMatchValue_')
-              if ( (matched_to_img_seq.size() == max_matches_ && max_matches_ != 0) || match_iter->match < min_match_value_)
-                break;
-
-              // Lookup IMAGE seq number from MATCH seq number
-              match_img_seq = match_iter->imgIdx > -1 ? to_img_seq.at(match_iter->imgIdx) : -1;
-
-              // Additionally if required,
-              // --do NOT return matches below self matches OR new places ('-1')
-              if ((match_img_seq >= image_id-self_match_window_ && disable_self_match_) || (match_img_seq == -1 && disable_unknown_match_))
-                continue;
-
-              // Add the Image seq number and its match likelihood
-              matched_to_img_seq.push_back(match_img_seq);
-              matched_to_img_match.push_back(match_iter->match);
-            }
-          }
-          else
-          {
-            // First frame processed
-            fabMap_->add(bow);
-            first_frame = false;
+            // Increase the lc counter
+            lc++;
           }
         }
 
-        // Log
-        ros::WallDuration bow_time = ros::WallTime::now() - bow_start;
-        cout << "FABMAP IMAGES [ ";
-        for (int i=0; i<matched_to_img_seq.size();i++)
-          cout << matched_to_img_seq[i] << " ";
-        cout << "]   \t"  << bow_time.toSec() << " sec." << endl;
-        cout << "FABMAP PROB [ ";
-        for (int i=0; i<matched_to_img_match.size();i++)
-          cout << matched_to_img_match[i] << " ";
-        cout << "]" << endl;
-
-
-
-        // VLAD ----------------------------------
-        kpts.clear();
-        Mat descriptors;
-        detector_->detect(img, kpts);
-        extractor_->compute(img, kpts, descriptors);
-
-        // Initialize and re-format input data
-        vl_size num_data_to_encode = descriptors.rows;
-        vl_uint32 *indexes = new vl_uint32[num_data_to_encode];
-        float *distances = new float[num_data_to_encode] ;
-        float *desc_to_encode = new float[num_data_to_encode * dimension_];
-        for(int i=0; i<num_data_to_encode; i++)
-        {
-          for(int d=0; d<dimension_; d++)
-            desc_to_encode[i*dimension_ + d] = descriptors.at<float>(i,d);
-        }
-
-        // Find nearest cluster centers for the data that should be encoded
-        ros::WallTime vlad_start = ros::WallTime::now();
-        vl_kmeans_quantize(kmeans_, indexes, distances, desc_to_encode ,num_data_to_encode);
-        float *assignments = new float[num_data_to_encode * num_centers_];
-        std::fill_n(assignments, num_data_to_encode * num_centers_, 0);
-        for(int i=0; i<num_data_to_encode; i++)
-          assignments[i * num_centers_ + indexes[i]] = 1.0;
-
-        // Variable "enc" will store the vlad global descriptor
-        float *enc = new float[dimension_ * num_centers_];
-        std::fill_n(enc, dimension_ * num_centers_ , 0);
-        vl_kmeans_get_centers(kmeans_);
-        vl_vlad_encode(enc, VL_TYPE_FLOAT, kmeans_->centers, dimension_, num_centers_, desc_to_encode, num_data_to_encode, assignments, 0) ;
-        Mat enc_mat = cv::Mat(dimension_, num_centers_, CV_32F, enc);
-        transpose(enc_mat, enc_mat);
-
-        // Projection reduction
-        Mat enc_mat_proj = p_.project(enc_mat);
-
-        // Store for future comparisons
-        map_vlad[image_id] = enc_mat_proj;
-
-        // Search for loop closures
-        vector< pair<int,float> > vlad_candidates;
-        for (int i=0; i<(image_id - min_neighbor_-1); i++)
-        {
-          float msquared = 0.0;
-          for(int j=0; j<enc_mat_proj.rows; j++)
-          {
-            float scalar_p = 0.0;
-            for(int d=0; d<enc_mat_proj.cols; d++)
-              scalar_p += enc_mat_proj.at<float>(j,d) * map_vlad[i].at<float>(j,d);
-            msquared += scalar_p;
-          }
-          vlad_candidates.push_back(make_pair(i, msquared));
-        }
-
-        vector<int> vlad_matchings;
-        if (vlad_candidates.size() > 0)
-        {
-          // Sort the candidates to close loop
-          std::sort(vlad_candidates.begin(), vlad_candidates.end(), EvaluationNode::sortBydistance);
-
-          for(int i=0; i<n_candidates_; i++)
-            vlad_matchings.push_back(vlad_candidates[i].first);
-        }
-
-        // Log
-        ros::WallDuration vlad_time = ros::WallTime::now() - vlad_start;
-        cout << "VLAD IMAGES [ ";
-        for (int i=0; i<vlad_matchings.size();i++)
-          cout << vlad_matchings[i] << " ";
-        cout << "]   \t"  << vlad_time.toSec() << " sec." << endl;
-
-
-
-        // GROUND TRUTH ----------------------------------
-        vector<int> current_gt;
-        if (ground_truth.size() > image_id)
-        {
-          // Get the current row
-          vector<int> gt_row = ground_truth[image_id];
-          cout << "GT [ ";
-          for (uint i=0; i<gt_row.size(); i++)
-          {
-            if (gt_row[i] == 1)
-            {
-              current_gt.push_back(i);
-              cout << i << " ";
-            }
-          }
-          cout << "]" << endl;
-        }
-
-
-        // Check if openfabmap and haloc have detected a correct loop
-        int haloc_idx = -1;
-        int openfabmap_idx = -1;
-        int vlad_idx = -1;
-        bool haloc_valid = false;
-        bool openfabmap_valid = false;
-        bool vlad_valid = false;
-        for (uint i=0; i<current_gt.size(); i++)
-        {
-          // Exit
-          if (haloc_valid && openfabmap_valid && vlad_valid) break;
-
-          // HALOC
-          if (!haloc_valid)
-          {
-            for (uint j=0; j<hash_matching.size(); j++)
-            {
-              if (abs(hash_matching[j].first - current_gt[i]) < 10)
-              {
-                haloc_idx = j;
-                haloc_valid = true;
-                break;
-              }
-            }
-          }
-
-          // OPENFABMAP
-          if (!openfabmap_valid)
-          {
-            for (uint j=0; j<matched_to_img_seq.size(); j++)
-            {
-              if (abs(matched_to_img_seq[j] - current_gt[i]) < 10)
-              {
-                openfabmap_idx = j;
-                openfabmap_valid = true;
-                break;
-              }
-            }
-          }
-
-          // VLAD
-          if (!vlad_valid)
-          {
-            for (uint j=0; j<vlad_matchings.size(); j++)
-            {
-              if (abs(vlad_matchings[j] - current_gt[i]) < 10)
-              {
-                vlad_idx = j;
-                vlad_valid = true;
-                break;
-              }
-            }
-          }
-        }
-
-        // If valid loop closure found, save the current index into a file
-        if (haloc_valid || openfabmap_valid || vlad_valid)
-        {
-          // Open to append
-          fstream f_output(output_file_.c_str(), ios::out | ios::app);
-          f_output << fixed << setprecision(9) <<
-                haloc_idx  << "," <<
-                openfabmap_idx << "," <<
-                vlad_idx << "," <<
-                haloc_time.toSec() << "," <<
-                bow_time.toSec() << "," <<
-                vlad_time.toSec() <<  endl;
-          f_output.close();
-        }
-
-        // Next directory entry
-        it++;
+        id++;
       }
+
+      // Next directory entry
+      it++;
     }
 
-  private:
+    // Save
+    string out_file = execution_dir_ + "/output.txt";
+    fstream f_out(out_file.c_str(), ios::out | ios::trunc);
+    f_out << output_csv.str();
+    f_out.close();
 
-    // Parameters
-    ros::NodeHandle nhp_;
-    int max_images_;
-    int min_descriptor_count_;
-    double cluster_size_;
-    double lower_information_bound_;
-    string vocab_path_;
-    string cl_tree_path_;
-    string trainbows_path_;
-    string gt_file_;
+    ROS_INFO_STREAM("END. Found " << lc << " lc.");
+    ros::shutdown();
 
-    // OpenFABMap2
-    of2::FabMap *fabMap_;
-    of2::ChowLiuTree tree_;
-    of2::BOWMSCTrainer trainer_;
-    Ptr<FeatureDetector> detector_;
-    Ptr<DescriptorExtractor>  extractor_;
-    Ptr<DescriptorMatcher> matcher_;
-    Ptr<BOWImgDescriptorExtractor> bide_;
-    Mat vocab_;
-    Mat bows_;
-    Mat cl_tree_;
-    vector<string> frames_sampled_;
+  }
 
-    int max_matches_;
-    double min_match_value_;
-    bool disable_self_match_;
-    int self_match_window_;
-    bool disable_unknown_match_;
-    bool add_only_new_places_;
-    Mat confusion_mat_;
+  Mat readDesc(int id)
+  {
+    // Get the image keypoints and descriptors
+    cv::FileStorage fs;
+    fs.open(execution_dir_+"/"+lexical_cast<string>(id)+".yml", cv::FileStorage::READ);
+    if (!fs.isOpened())
+      ROS_ERROR("[Haloc:] ERROR -> Failed to open the image descriptors.");
+    cv::Mat desc;
+    fs["desc"] >> desc;
+    fs.release();
+    return desc;
+  }
 
-    // VLAD
-    vl_size dimension_;
-    vl_size num_centers_;
-    vl_size maxiter_ ;
-    vl_size maxcomp_;
-    vl_size maxrep_;
-    vl_size ntrees_;
-    VlKMeans *kmeans_;
-    int min_neighbor_;
-    int n_candidates_;
-    PCA p_;
+  void getCandidates(int id, vector< pair<int,float> >& candidates)
+  {
+    // Init
+    candidates.clear();
 
-    // Finishes the learning stage
-    void saveBoW()
+    // Check if enough neighbors
+    if ((int)hash_table_.size() <= 10) return;
+
+    // Query hash
+    vector<float> hash_q = hash_table_[id].second;
+
+    // Loop over all the hashes stored
+    vector< pair<int,float> > all_matchings;
+    for (uint i=0; i<hash_table_.size(); i++)
     {
-      ROS_INFO("[Haloc:] Clustering to produce vocabulary");
-      vocab_ = trainer_.cluster();
-      ROS_INFO("[Haloc:] Vocabulary contains %d words, %d dims", vocab_.rows, vocab_.cols);
+      // Discard window
+      if (hash_table_[i].first > id-10 && hash_table_[i].first < id+10) continue;
 
-      ROS_INFO("[Haloc:] Setting vocabulary...");
-      bide_->setVocabulary(vocab_);
+      // Do not compute the hash matching with itself
+      if (hash_table_[i].first == id) continue;
 
-      ROS_INFO("[Haloc:] Gathering BoW's...");
-      findWords();
-
-      ROS_INFO("[Haloc:] Making the Chow Liu tree...");
-      tree_.add(bows_);
-      cl_tree_ = tree_.make(lower_information_bound_);
-
-      ROS_INFO("[Haloc:] Saving work completed...");
-      saveCodebook();
+      // Hash matching
+      vector<float> hash_t = hash_table_[i].second;
+      float m = hash_.match(hash_q, hash_t);
+      all_matchings.push_back(make_pair(hash_table_[i].first, m));
     }
 
-    // Find words
-    void findWords()
+    // Sort the hash matchings
+    sort(all_matchings.begin(), all_matchings.end(), haloc::Utils::sortByMatching);
+
+    // Retrieve the best n matches
+    uint max_size = 40;
+    if (max_size > all_matchings.size()) max_size = all_matchings.size();
+    for (uint i=0; i<max_size; i++)
+      candidates.push_back(all_matchings[i]);
+
+    // Normalize hash matching from 0 to 1
+    float max = 0.0;
+    float min = 99999999999.9;
+    for (uint i=0; i<candidates.size(); i++)
     {
-      Mat bow;
-      vector<KeyPoint> kpts;
-      for (uint i=0; i<frames_sampled_.size(); i++)
-      {
-        string path = frames_sampled_[i];
-        Mat img = imread(path, CV_LOAD_IMAGE_COLOR);
-        detector_->detect(img, kpts);
-        bide_->compute(img, kpts, bow);
-        bows_.push_back(bow);
-      }
+      if (candidates[i].second > max)
+        max = candidates[i].second;
+      if (candidates[i].second < min)
+        min = candidates[i].second;
     }
+    for (uint i=0; i<candidates.size(); i++)
+      candidates[i].second = (candidates[i].second - min) / (max - min);
 
-    // Save everything
-    void saveCodebook()
-    {
-      ROS_INFO("[Haloc:] Saving codebook...");
-      FileStorage file;
-
-      ROS_INFO_STREAM("[Haloc:] Saving Vocabulary to " << vocab_path_);
-      file.open(vocab_path_, FileStorage::WRITE);
-      file << "Vocabulary" << vocab_;
-      file.release();
-
-      ROS_INFO_STREAM("[Haloc:] Saving Chow Liu Tree to " << cl_tree_path_);
-      file.open(cl_tree_path_, FileStorage::WRITE);
-      file << "Tree" << cl_tree_;
-      file.release();
-
-      ROS_INFO_STREAM("[Haloc:] Saving Trained Bag of Words to " << trainbows_path_);
-      file.open(trainbows_path_, FileStorage::WRITE);
-      file << "Trainbows" << bows_;
-      file.release();
-    }
-
-    // Load the codebook
-    void loadCodebook()
-    {
-      ROS_INFO("[Haloc:] Loading codebook...");
-
-      FileStorage file;
-      file.open(vocab_path_, FileStorage::READ);
-      file["Vocabulary"] >> vocab_;
-      file.release();
-      ROS_INFO("[Haloc:] Vocabulary with %d words, %d dims loaded", vocab_.rows, vocab_.cols);
-
-      file.open(cl_tree_path_, FileStorage::READ);
-      file["Tree"] >> cl_tree_;
-      file.release();
-      ROS_INFO("[Haloc:] Chow Liu Tree loaded");
-
-      file.open(trainbows_path_, FileStorage::READ);
-      file["Trainbows"] >> bows_;
-      file.release();
-      ROS_INFO("[Haloc:] Trainbows loaded");
-
-      ROS_INFO("[Haloc:] Setting the Vocabulary...");
-      bide_->setVocabulary(vocab_);
-
-      ROS_INFO("[Haloc:] Initialising FabMap2 with Chow Liu tree...");
-
-      // Create an instance of the FabMap2
-      fabMap_ = new of2::FabMap2(cl_tree_, 0.39, 0, of2::FabMap::SAMPLED | of2::FabMap::CHOW_LIU);
-
-      ROS_INFO("[Haloc:] Adding the trained bag of words...");
-      fabMap_->addTraining(bows_);
-    }
-
-    // Sort vectors by distance
-    static bool sortBydistance(const pair<int,float> p1, const pair<int,float> p2)
-    {
-      return (p1.second > p2.second);
-    }
+  }
 };
 
 int main(int argc, char** argv)
 {
-  // Init ros node
-  ros::init(argc, argv, "evaluation");
-  EvaluationNode node;
-
-  // Read the parameters
-  node.readParameters();
-  node.init();
-
-  // BOW and VLAD training
-  if (!node.training_dir_.empty())
-  {
-    // Sanity check
-    if (!fs::exists(node.training_dir_) || !fs::is_directory(node.training_dir_))
-    {
-      ROS_ERROR_STREAM("[Haloc:] The image directory does not exists: " <<
-      node.training_dir_);
-      return 0;
-    }
-
-    // Training
-    node.training();
+  // Parse arguments
+  if (argc < 2) {
+    // Inform the user of how to use the program
+    std::cout << "Usage is: rosrun libhaloc evaluation <image directory>\n";
+    std::cin.get();
+    exit(0);
   }
+  string work_dir = argv[1];
 
-  // Normal execution
-  if (!node.running_dir_.empty())
-  {
-    // Sanity check
-    if (!fs::exists(node.running_dir_) || !fs::is_directory(node.running_dir_))
-    {
-      ROS_ERROR_STREAM("[Haloc:] The image directory does not exists: " <<
-      node.running_dir_);
-      return 0;
-    }
-
-    // Run
-    node.run();
-  }
-
-  // Stop libhaloc
-  node.lc_.finalize();
-
+  ros::init(argc, argv, "libhaloc");
+  Haloc node(work_dir);
   ros::spin();
   return 0;
 }
+

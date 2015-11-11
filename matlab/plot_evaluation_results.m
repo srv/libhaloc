@@ -2,28 +2,29 @@
 clear all
 close all
 
-M = csvread('output.txt');
-[rows columns] = size(M);
+% Load the files provided by tools/evaluation.cpp
+lc = csvread('output.txt');
+runtime = csvread('runtime.txt');
 
 %% Probability
 haloc = zeros(1,5);
 bow = zeros(1,5);
 vlad = zeros(1,5);
-for i=1:rows
-    if (M(i,1) >= 0)
-        haloc(M(i,1)+1) = haloc(M(i,1)+1) + 1;
+for i=1:size(lc,1)
+    if (lc(i,1) >= 0)
+        haloc(lc(i,1)+1) = haloc(lc(i,1)+1) + 1;
     end
-    if (M(i,2) >= 0)
-        bow(M(i,2)+1) = bow(M(i,2)+1) + 1;
+    if (lc(i,2) >= 0)
+        bow(lc(i,2)+1) = bow(lc(i,2)+1) + 1;
     end
-    if (M(i,3) >= 0)
-        vlad(M(i,3)+1) = vlad(M(i,3)+1) + 1;
+    if (lc(i,3) >= 0)
+        vlad(lc(i,3)+1) = vlad(lc(i,3)+1) + 1;
     end
 end
 
-haloc = haloc./size(M,1);
-bow = bow./size(M,1);
-vlad = vlad./size(M,1);
+haloc = haloc./size(lc,1);
+bow = bow./size(lc,1);
+vlad = vlad./size(lc,1);
 
 sum_haloc = 0;
 sum_bow = 0;
@@ -41,21 +42,28 @@ figure
 bar([haloc', bow', vlad']);
 grid on;
 legend('sisHALOC', 'BoW', 'VLAD');
+set(gca, 'FontSize', 35);
+set(gca, 'FontName', 'Times');
+xlabel('Top p candidates');
+ylabel('Percentage of valid loop closings');
 
 %% Time
 min_val = 0;
-max_val = 2500;
-step = (max_val - min_val)/rows;
-x_axis = min_val:step:max_val-step;
+max_val = size(runtime,1);
+x_axis = min_val:1:max_val-1;
 
 figure
-plot(x_axis, M(:,4), 'Color',[0,0,0.561]);
+plot(x_axis, runtime(:,1), 'Color',[0,0,0.561]);
 hold on;
-plot(x_axis, M(:,5), 'Color',[0.498,0,0], 'LineStyle', '--');
-plot(x_axis, M(:,6), 'Color',[0,0.498,0], 'LineStyle', '--');
+plot(x_axis, runtime(:,2), 'Color',[0.498,0,0], 'LineStyle', '--');
+plot(x_axis, runtime(:,3), 'Color',[0,0.498,0], 'LineStyle', '--');
 grid on;
 legend('sisHALOC', 'BoW', 'VLAD');
+set(gca, 'FontSize', 35);
+set(gca, 'FontName', 'Times');
+xlabel('Top p candidates');
+ylabel('Percentage of valid loop closings');
 
-fprintf('sisHALOC mean runtime %d\n', mean(M(:,4)));
-fprintf('BoW mean runtime %d\n', mean(M(:,5)));
-fprintf('VLAD mean runtime %d\n', mean(M(:,6)));
+fprintf('sisHALOC mean runtime %d\n', mean(runtime(:,1)));
+fprintf('BoW mean runtime %d\n', mean(runtime(:,2)));
+fprintf('VLAD mean runtime %d\n', mean(runtime(:,3)));
