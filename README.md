@@ -7,6 +7,8 @@ The image hashing implemented in this library is based on features (SIFT, SURF, 
 
 The library works for both mono and stereo datasets and provides a transformation (2d for mono and 3d for stereo) when loop closures are found.
 
+[Related paper][paper]
+
 
 Dependencies
 -------
@@ -78,3 +80,4 @@ See it in action [here][link_demo].
 
 [link_demo]: http://pul.uib.es/libhaloc/
 [stereo_slam]: https://github.com/srv/stereo_slam
+[paper]: http://srv.uib.es/global-image-signature-for-visual-loop-closure-detection/
