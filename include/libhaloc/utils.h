@@ -229,15 +229,11 @@ public:
     double fy_l = stereo_camera_model.left().fy();
     double cx_l = stereo_camera_model.left().cx();
     double cy_l = stereo_camera_model.left().cy();
-    double tx_l = stereo_camera_model.left().Tx();
-    double ty_l = stereo_camera_model.left().Ty();
 
     double fx_r = stereo_camera_model.right().fx();
     double fy_r = stereo_camera_model.right().fy();
     double cx_r = stereo_camera_model.right().cx();
     double cy_r = stereo_camera_model.right().cy();
-    double tx_r = stereo_camera_model.right().Tx();
-    double ty_r = stereo_camera_model.right().Ty();
 
     double baseline = stereo_camera_model.baseline();
 
