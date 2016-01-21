@@ -60,8 +60,8 @@ Include the header in your .cpp file:
 
 
 You can use libhaloc in two different ways:
-1) To generate the image hashes and then, use your own techniques to compare this hashes and retrieve the best candidates to close loop.
-2) To use the full power of libhaloc to search loop closing candidates and compute the homogeneous transformation (if any).
+- To generate the image hashes and then, use your own techniques to compare this hashes and retrieve the best candidates to close loop.
+- To use the full power of libhaloc to search loop closing candidates and compute the homogeneous transformation (if any).
 
 ### To use libhaloc as the first option:
 
