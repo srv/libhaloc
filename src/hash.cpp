@@ -36,10 +36,10 @@ void haloc::Hash::setParams(const Params& params)
 }
 
 // Class initialization
-void haloc::Hash::init(Mat desc, bool proj_orthogonal)
+void haloc::Hash::init(Mat desc)
 {
   // Create the random projections vectors
-  initProjections(desc.rows, proj_orthogonal);
+  initProjections(desc.rows);
 
   // Set the size of the descriptors
   h_size_ = params_.num_proj * desc.cols;
@@ -83,7 +83,7 @@ vector<float> haloc::Hash::getHash(Mat desc)
   * \param size of the initial descriptor matrix.
   * \param true to generate 'n' random orthogonal projections, false to generate 'n' random non-orthogonal projections.
   */
-void haloc::Hash::initProjections(int desc_size, bool orthogonal)
+void haloc::Hash::initProjections(int desc_size)
 {
   // Initializations
   int seed = time(NULL);
@@ -93,64 +93,52 @@ void haloc::Hash::initProjections(int desc_size, bool orthogonal)
   // for a scalar to handle the larger cases.
   int v_size = 6*desc_size;
 
-  if (orthogonal)
+  // We will generate N-orthogonal vectors creating a linear system of type Ax=b.
+  // Generate a first random vector
+  vector<float> r = compute_random_vector(seed, v_size);
+  r_.push_back(unit_vector(r));
+
+  // Generate the set of orthogonal vectors
+  for (uint i=1; i<params_.num_proj; i++)
   {
-    // We will generate N-orthogonal vectors creating a linear system of type Ax=b.
+    // Generate a random vector of the correct size
+    vector<float> new_v = compute_random_vector(seed + i, v_size - i);
 
-    // Generate a first random vector
-    vector<float> r = compute_random_vector(seed, v_size);
-    r_.push_back(unit_vector(r));
-
-    // Generate the set of orthogonal vectors
-    for (uint i=1; i<params_.num_proj; i++)
+    // Get the right terms (b)
+    VectorXf b(r_.size());
+    for (uint n=0; n<r_.size(); n++)
     {
-      // Generate a random vector of the correct size
-      vector<float> new_v = compute_random_vector(seed + i, v_size - i);
-
-      // Get the right terms (b)
-      VectorXf b(r_.size());
-      for (uint n=0; n<r_.size(); n++)
+      vector<float> cur_v = r_[n];
+      float sum = 0.0;
+      for (uint m=0; m<new_v.size(); m++)
       {
-        vector<float> cur_v = r_[n];
-        float sum = 0.0;
-        for (uint m=0; m<new_v.size(); m++)
-        {
-          sum += new_v[m]*cur_v[m];
-        }
-        b(n) = -sum;
+        sum += new_v[m]*cur_v[m];
       }
-
-      // Get the matrix of equations (A)
-      MatrixXf A(i, i);
-      for (uint n=0; n<r_.size(); n++)
-      {
-        uint k=0;
-        for (uint m=r_[n].size()-i; m<r_[n].size(); m++)
-        {
-          A(n,k) = r_[n][m];
-          k++;
-        }
-      }
-
-      // Apply the solver
-      VectorXf x = A.colPivHouseholderQr().solve(b);
-
-      // Add the solutions to the new vector
-      for (uint n=0; n<r_.size(); n++)
-        new_v.push_back(x(n));
-      new_v = unit_vector(new_v);
-
-      // Push the new vector
-      r_.push_back(new_v);
+      b(n) = -sum;
     }
-  }
-  else
-  {
-    for (uint i=0; i<params_.num_proj; i++)
+
+    // Get the matrix of equations (A)
+    MatrixXf A(i, i);
+    for (uint n=0; n<r_.size(); n++)
     {
-      vector<float> r = compute_random_vector(seed + i, v_size);
-      r_.push_back(unit_vector(r));
+      uint k=0;
+      for (uint m=r_[n].size()-i; m<r_[n].size(); m++)
+      {
+        A(n,k) = r_[n][m];
+        k++;
+      }
     }
+
+    // Apply the solver
+    VectorXf x = A.colPivHouseholderQr().solve(b);
+
+    // Add the solutions to the new vector
+    for (uint n=0; n<r_.size(); n++)
+      new_v.push_back(x(n));
+    new_v = unit_vector(new_v);
+
+    // Push the new vector
+    r_.push_back(new_v);
   }
 }
 
