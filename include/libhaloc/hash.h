@@ -43,7 +43,7 @@ public:
   inline Params params() const { return params_; }
 
   // Initialize class
-  void init(Mat desc, bool proj_orthogonal);
+  void init(Mat desc);
 
   // Compute the hash
   vector<float> getHash(Mat desc);
@@ -54,7 +54,7 @@ public:
 private:
 
   // Init the random vectors for projections
-  void initProjections(int desc_size, bool orthogonal);
+  void initProjections(int desc_size);
 
   // Compute a random vector
   vector<float> compute_random_vector(uint seed, int size);

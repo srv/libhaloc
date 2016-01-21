@@ -1,83 +1,88 @@
 libhaloc
 =============
 
-ROS library for HAsh-based LOop Closure. This library provides the tools for image loop closing based on image hashing. Image hashing consists of representing every image with a small vector (hash). Then the hash of image A can be compared with the hash of image B in a super fast way in order to determine if images are similar.
+ROS library for HAsh-based LOop Closure detection. This library provides the tools for loop closing detection based on image hashing. Image hashing consists of representing every image with a small vector (hash). Then the hash of image A can be compared with the hash of image B in a super fast way in order to determine if images are similar.
 
-The image hashing implemented in this library is based on features (SIFT, SURF, ORB, etc.) so, if the features you choose are invariant to scale and rotation, the image hashing will be also invariant to these properties.
+The image hashing implemented in this library is based on SIFT features so, since SIFT is invariant to scale and rotation, the image hashing will be also invariant to these properties.
 
-The library works for both mono and stereo datasets and provides a transformation (2d for mono and 3d for stereo) when loop closures are found.
+The library works for both mono and stereo cameras and provides a transformation (2d for mono and 3d for stereo) when loop closures are found.
 
-[Related paper][paper]
-
-
-Dependencies
+Related paper
 -------
-VLFEAT (only for the evaluation tool)
-https://github.com/srv/libvlfeat
+[Autonomous Robots][paper]
+
+CITATION:
+```bash
+@Article{Negre Carrasco2015,
+   author="Negre Carrasco, Pep Lluis
+   and Bonin-Font, Francisco
+   and Oliver-Codina, Gabriel",
+   title="Global image signature for visual loop-closure detection",
+   journal="Autonomous Robots",
+   year="2015",
+   pages="1--15",
+   issn="1573-7527",
+   doi="10.1007/s10514-015-9522-4",
+   url="http://dx.doi.org/10.1007/s10514-015-9522-4"
+}
+```
 
 
 How it works
 -------
 
-Please see the examples directory for functional implementations. You can also check [this][stereo_slam] integration for a 3D Stereo Slam.
+Please check [this][stereo_slam] integration for a 3D Stereo Slam.
 
 
 1) Declare your haloc object like this:
 ```bash
-haloc::LoopClosure haloc_obj;
+haloc::LoopClosure haloc_;
 ```
 
 2) Set the haloc parameters:
 ```bash
 haloc::LoopClosure::Params params;
 params.work_dir = whatever;
-params.desc_type = whatever;
 .
 .
 .
-haloc_obj.setParams(params);
+haloc_.setParams(params);
 ```
 
 3) Initialize the object
 ```bash
-haloc_obj.init();
+haloc_.init();
 ```
 
-4) Then, for every image, call to setNode to save the new image and getLoopClosure to get any possible loop closure between the last image and any previous images.
+4) Then, for every image, call setNode(function) to store the image properties and getLoopClosure() to get any possible loop closure between the last image and any previous images.
 ```bash
 // Mono version
 int loop_closure_with; 	// <- Will contain the index of the image that closes loop with the last inserted (-1 if none).
-haloc_obj.setNode(img);
-bool valid = haloc_obj.getLoopClosure(loop_closure_with);
+tf::Transform trans;  // <- Will contain the transformation of the loop closure (if any).
+haloc_.setNode(img);
+bool valid = haloc_.getLoopClosure(loop_closure_with, trans);
 
 // Stereo version
 int loop_closure_with; 	// <- Will contain the index of the image that closes loop with the last inserted (-1 if none).
 tf::Transform trans; 	// <- Will contain the transformation of the loop closure (if any).
-haloc_obj.setNode(img_left, img_right);
-bool valid = haloc_obj.getLoopClosure(loop_closure_with, trans);
+haloc_.setNode(img_left, img_right);
+bool valid = haloc_.getLoopClosure(loop_closure_with, trans);
 ```
 
-In both cases, if valid is true, then a loop closure has been found, false otherwise.
+In both cases, if valid is true, then a loop closure has been found.
 
 
 Most Important Parameters
 -------
 
-* `work_dir` - Directory where the library will save the image informations (must be writtible!).
-* `desc_type` - Type of the descriptors (can be SIFT, SURF).
+* `work_dir` - Directory where the library will save the image information (must be writable!).
 * `desc_matching_type` - Can be CROSSCHECK or RATIO.
 * `desc_thresh_ratio` - Descriptor threshold for crosscheck matching (typically between 0.7-0.9) or ratio for ratio matching (typically between 0.6-0.8).
-* `min_neighbor` - Minimum number of neighbors that will be skiped for the loop closure (typically between 5-20, but depends on the frame rate).
-* `n_candidates` - Get the n first candidates of the hash matching (typically between 1-5).
-* `min_matches` - Minimun number of descriptor matches to consider a matching as possible loop closure (>8).
-* `min_inliers` - Minimum number of inliers to consider a matching as possible loop closure (>8).
-
-Demo
--------
-
-See it in action [here][link_demo].
+* `min_neighbor` - Minimum number of neighbors that will be skipped for the loop closure (typically between 5-20, but depends on the frame rate).
+* `n_candidates` - Get the n first candidates of the hash matching (typically 2, 3, or 4).
+* `min_matches` - Minimum number of descriptor matches to consider a matching as possible loop closure (>12).
+* `min_inliers` - Minimum number of inliers to consider a matching as possible loop closure (>12).
 
 
-[link_demo]: http://pul.uib.es/libhaloc/
 [stereo_slam]: https://github.com/srv/stereo_slam
-[paper]: http://srv.uib.es/global-image-signature-for-visual-loop-closure-detection/
+[paper]: http://link.springer.com/article/10.1007/s10514-015-9522-4?utm_source=twitterfeed&utm_medium=twitter

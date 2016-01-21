@@ -14,9 +14,8 @@
 #include <highgui.h>
 
 #include "opencv2/core/core.hpp"
-#include "opencv2/features2d/features2d.hpp"
 #include "opencv2/highgui/highgui.hpp"
-#include "opencv2/nonfree/features2d.hpp"
+#include "opencv2/features2d/features2d.hpp"
 
 using namespace boost;
 namespace fs=filesystem;
@@ -167,7 +166,7 @@ int haloc::LoopClosure::setNode(Mat img)
 
   // Initialize hash
   if (!hash_.isInitialized())
-    hash_.init(query_.getDesc(), true);
+    hash_.init(query_.getDesc());
 
   // Save hash to table
   hash_table_.push_back(make_pair(query_.getId(), hash_.getHash(query_.getDesc())));
@@ -207,7 +206,7 @@ int haloc::LoopClosure::setNode(Mat img_l, Mat img_r)
 
   // Initialize hash
   if (!hash_.isInitialized())
-    hash_.init(query_.getDesc(), true);
+    hash_.init(query_.getDesc());
 
   // Save hash to table
   hash_table_.push_back(make_pair(query_.getId(), hash_.getHash(query_.getDesc())));
