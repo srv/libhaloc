@@ -8,7 +8,7 @@ The image hashing implemented in this library is based on SIFT features so, sinc
 The library works for both mono and stereo cameras and provides a transformation (2d for mono and 3d for stereo) when loop closures are found.
 
 ## Related paper
--------
+
 [Autonomous Robots][paper]
 
 CITATION:
@@ -28,7 +28,7 @@ CITATION:
 ```
 
 ## How to prepare your SLAM node
--------
+
 
 Modify your CMakeLists.txt as follows:
 
@@ -56,7 +56,7 @@ Include the header in your .cpp file:
 
 
 ## How to call the library
--------
+
 
 You can use libhaloc in two different ways:
 1) To generate the image hashes and then, use your own techniques to compare this hashes and retrieve the best candidates to close loop.
@@ -132,11 +132,14 @@ bool valid = haloc_.getLoopClosure(loop_closure_with, trans);
 In both cases, if valid is true, then a loop closure has been found.
 
 
+## Example
+
+
 Please check [this][stereo_slam] integration for a 3D Stereo Slam.
 
 
 ## Most Important Parameters
--------
+
 
 * `work_dir` - Directory where the library will save the image information (must be writable!).
 * `desc_matching_type` - Can be CROSSCHECK or RATIO.
