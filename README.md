@@ -136,7 +136,7 @@ In both cases, if valid is true, then a loop closure has been found.
 ## Example
 
 
-Please check [this][stereo_slam] integration for a 3D Stereo Slam.
+Check [this][stereo_slam] integration for a 3D Stereo Slam.
 
 
 ## Most Important Parameters
