@@ -52,8 +52,9 @@ target_link_libraries(your_executable_here
 ```
 
 Include the header in your .cpp file:
+```bash
 #include <libhaloc/lc.h>
-
+```
 
 ## How to call the library
 
