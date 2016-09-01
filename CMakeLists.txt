@@ -10,8 +10,8 @@ find_package(catkin REQUIRED COMPONENTS
     cmake_modules)
 
 # Dependencies - Eigen:
-find_package(Eigen REQUIRED)
-include_directories(${Eigen_INCLUDE_DIRS})
+find_package(Eigen3 REQUIRED)
+include_directories(${EIGEN3_INCLUDE_DIRS})
 
 # Dependencies - OpenCV:
 find_package(OpenCV REQUIRED)
@@ -25,7 +25,7 @@ add_library(haloc
             src/lc.cpp
             src/image.cpp
             src/hash.cpp)
-target_link_libraries(haloc ${Boost_LIBRARIES} ${Eigen_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
+target_link_libraries(haloc ${Boost_LIBRARIES} ${EIGEN3_LIBRARIES} ${OpenCV_LIBRARIES} ${catkin_LIBRARIES})
 
 # Include directories
 include_directories(${catkin_INCLUDE_DIRS} include)

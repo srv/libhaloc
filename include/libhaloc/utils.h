@@ -3,9 +3,7 @@
 
 #include <ros/ros.h>
 #include <tf/transform_broadcaster.h>
-#include <opencv2/features2d/features2d.hpp>
-#include <opencv2/nonfree/features2d.hpp>
-#include <opencv2/nonfree/nonfree.hpp>
+#include <opencv2/xfeatures2d.hpp>
 #include <image_geometry/stereo_camera_model.h>
 
 using namespace std;
@@ -29,24 +27,29 @@ public:
                                vector<KeyPoint>& key_points,
                                string type)
   {
-    // Check Opponent color space descriptors
-    size_t pos = 0;
-    if ( (pos=type.find("Opponent")) == 0)
+    Ptr<Feature2D> cv_detector;
+    if (type.compare("SIFT") == 0)
     {
-      pos += string("Opponent").size();
-      type = type.substr(pos);
+      cv_detector = xfeatures2d::SIFT::create();
+    }
+    else if (type.compare("SURF") == 0)
+    {
+      cv_detector = xfeatures2d::SURF::create();
+    }
+    else
+    {
+      ROS_ERROR("[libhaloc:] Please use SIFT or SURF");
+      return;
     }
 
-    initModule_nonfree();
-    Ptr<FeatureDetector> cv_detector;
-    cv_detector = FeatureDetector::create(type);
+
     try
     {
       cv_detector->detect(image, key_points);
     }
     catch (Exception& e)
     {
-      ROS_WARN("[StereoSlam:] cv_detector exception: %s", e.what());
+      ROS_WARN("[libhaloc:] cv_detector exception: %s", e.what());
     }
   }
 
@@ -59,15 +62,28 @@ public:
   static void descriptorExtraction(const Mat& image,
    vector<KeyPoint>& key_points, Mat& descriptors, string type)
   {
-    Ptr<DescriptorExtractor> cv_extractor;
-    cv_extractor = DescriptorExtractor::create(type);
+    Ptr<Feature2D> cv_extractor;
+    if (type.compare("SIFT") == 0)
+    {
+      cv_extractor = xfeatures2d::SIFT::create();
+    }
+    else if (type.compare("SURF") == 0)
+    {
+      cv_extractor = xfeatures2d::SURF::create();
+    }
+    else
+    {
+      ROS_ERROR("[libhaloc:] Please use SIFT or SURF");
+      return;
+    }
+
     try
     {
       cv_extractor->compute(image, key_points, descriptors);
     }
     catch (Exception& e)
     {
-      ROS_WARN("[StereoSlam:] cv_extractor exception: %s", e.what());
+      ROS_WARN("[libhaloc:] cv_extractor exception: %s", e.what());
     }
   }
 
