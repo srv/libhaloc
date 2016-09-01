@@ -1,8 +1,8 @@
 #ifndef IMAGE_H
 #define IMAGE_H
 
-#include "opencv2/core/core.hpp"
-#include "opencv2/features2d/features2d.hpp"
+#include <opencv2/core.hpp>
+#include <opencv2/features2d.hpp>
 #include <image_geometry/stereo_camera_model.h>
 #include "utils.h"
 
