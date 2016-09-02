@@ -45,14 +45,14 @@ public:
 
     // Default values
     static const int                    DEFAULT_NUM_PROJ = 2;
-    static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
+    double                              DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
     static const int                    DEFAULT_MIN_NEIGHBOR = 10;
     static const int                    DEFAULT_N_CANDIDATES = 2;
     static const int                    DEFAULT_GROUP_RANGE = 5;
     static const int                    DEFAULT_MIN_MATCHES = 20;
     static const int                    DEFAULT_MIN_INLIERS = 12;
-    static const double                 DEFAULT_MAX_REPROJ_ERR = 2.0;
+    double                              DEFAULT_MAX_REPROJ_ERR = 2.0;
     static const bool                   DEFAULT_VERBOSE = false;
     static const bool                   DEFAULT_SAVE_IMAGES = false;
   };

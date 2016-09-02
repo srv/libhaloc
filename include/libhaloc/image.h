@@ -36,7 +36,7 @@ public:
     int b_max_features;                 //!> Maximum number of features per bucket (only stereo).
 
     // Default values
-    static const double                 DEFAULT_DESC_THRESH_RATIO = 0.8;
+    double                              DEFAULT_DESC_THRESH_RATIO = 0.8;
     static const int                    DEFAULT_MIN_MATCHES = 20;
     static const int                    DEFAULT_EPIPOLAR_THRESH = 1;
     static const int                    DEFAULT_B_WIDTH = 40;
