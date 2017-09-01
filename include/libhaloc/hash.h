@@ -1,74 +1,180 @@
-#ifndef HASH_H
-#define HASH_H
+//  Copyright (c) 2017 Universitat de les Illes Balears
+//  This file is part of LIBHALOC.
+//
+//  LIBHALOC is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  LIBHALOC is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with LIBHALOC. If not, see <http://www.gnu.org/licenses/>.
 
-#include "opencv2/core/core.hpp"
-#include "opencv2/features2d/features2d.hpp"
+#ifndef LIBHALOC_INCLUDE_LIBHALOC_HASH_H_
+#define LIBHALOC_INCLUDE_LIBHALOC_HASH_H_
+
+#include "libhaloc/publisher.h"
+
 #include <Eigen/Eigen>
 #include <Eigen/Dense>
 
-using namespace std;
-using namespace cv;
-using namespace Eigen;
+#include <vector>
 
-namespace haloc
-{
+#include <opencv2/core/core.hpp>
+#include <opencv2/features2d/features2d.hpp>
 
-class Hash
-{
+namespace haloc {
 
-public:
-
-  // Class constructor
-  Hash();
-
-  struct Params
-  {
-    //Default constructor sets all values to defaults.
+class Hash {
+ public:
+  /**
+   * @brief      Struct for class parameters
+   */
+  struct Params {
+    /**
+     * @brief      Default constructor
+     */
     Params();
 
     // Class parameters
-    int num_proj;                   //!> Number of projections required
+    int bucket_rows;             //!> Number of horizontal divisions for the descriptors bucketing
+    int bucket_cols;             //!> Number of vertical divisions for the descriptors bucketing
+    int max_desc;                //!> Maximum number of descriptors per image
+    int num_proj;                //!> Number of projections required
 
     // Default values
-    static const int              DEFAULT_NUM_PROJ = 2;
+    static const int             DEFAULT_BUCKET_ROWS = 3;
+    static const int             DEFAULT_BUCKET_COLS = 4;
+    static const int             DEFAULT_MAX_DESC = 100;
+    static const int             DEFAULT_NUM_PROJ = 3;
   };
 
-  // Set the parameter struct
-  void setParams(const Params& params);
+  /**
+   * @brief      Empty class constructor.
+   */
+  Hash();
 
-  // Returns true if the class has been initialized
-  bool isInitialized();
+  /**
+   * @brief      Sets the parameters.
+   *
+   * @param[in]  params  The parameters.
+   */
+  inline void SetParams(const Params& params) {params_ = params;}
 
-  // Return current parameters
-  inline Params params() const { return params_; }
+  /**
+   * @brief      Returns the parameters.
+   *
+   * @return     The parameters.
+   */
+  inline Params GetParams() const {return params_;}
 
-  // Initialize class
-  void init(Mat desc);
+  /**
+   * @brief      Determines if class is initialized.
+   *
+   * @return     True if initialized, False otherwise.
+   */
+  inline bool IsInitialized() const {return initialized_;}
 
-  // Compute the hash
-  vector<float> getHash(Mat desc);
+  /**
+   * @brief      Bucket the features and compute a hash for every bucket.
+   *
+   * @param[in]  kp        The keypoints vector.
+   * @param[in]  desc      The descriptors.
+   * @param[in]  img_size  The image size.
+   *
+   * @return     The bucketed hash.
+   */
+  void GetBucketedHash(const std::vector<cv::KeyPoint>& kp,
+    const cv::Mat& desc, const cv::Size& img_size);
 
-  // Compute the distance between 2 hashes
-  float match(vector<float> hash_1, vector<float> hash_2);
+  /**
+   * @brief      Compute the hash without bucketing.
+   *
+   * @param[in]  desc  The descriptors.
+   *
+   * @return     The hash.
+   */
+  std::vector<float> GetHash(const cv::Mat& desc);
 
-private:
+  /**
+   * @brief      Compute the distance between 2 hashes.
+   *
+   * @param[in]  hash_1  The hash 1.
+   * @param[in]  hash_2  The hash 2.
+   *
+   * @return     The distance.
+   */
+  float Match(const std::vector<float>& hash_1,
+    const std::vector<float>& hash_2);
 
-  // Init the random vectors for projections
-  void initProjections(int desc_size);
+  /**
+   * @brief      Publishes the state and debug variables. Must be called after a
+   *             hash computation.
+   *
+   * @param[in]  img   The original image
+   */
+  void PublishState(const cv::Mat& img);
 
-  // Compute a random vector
-  vector<float> compute_random_vector(uint seed, int size);
+ protected:
+  /**
+   * @brief      Init the class.
+   *
+   * @param[in]  img_size  The image size.
+   * @param[in]  num_feat  The number of features for the input image.
+   */
+  void Init(const cv::Size& img_size, const int& num_feat);
 
-  // Make a vector unit
-  vector<float> unit_vector(vector<float> x);
+  /**
+   * @brief      Initializes the random vectors for projections.
+   *
+   * @param[in]  size  The size.
+   */
+  void InitProjections(const int& size);
 
+  /**
+   * @brief      Calculates a random vector.
+   *
+   * @param[in]  size  The size.
+   * @param[in]  seed  The seed.
+   *
+   * @return     The random vector.
+   */
+  std::vector<float> ComputeRandomVector(const int& size, uint seed);
+
+  /**
+   * @brief      Makes a vector unitary.
+   *
+   * @param[in]  x     The input vector.
+   *
+   * @return     The output unit vector.
+   */
+  std::vector<float> UnitVector(const std::vector<float>& x);
+
+  /**
+   * @brief      Bucket the descriptors.
+   *
+   * @param[in]  kp    The keypoint vector.
+   * @param[in]  desc  The descriptors.
+   *
+   * @return     The bucketed descriptors.
+   */
+  std::vector<cv::Mat> BucketDescriptors(const std::vector<cv::KeyPoint>& kp,
+    const cv::Mat& desc);
+
+ private:
   // Properties
-  Params params_;                           //!> Stores parameters
-  vector< vector<float> > r_;               //!> Vector of random values
-  int h_size_;                              //!> Size of the hash
-  bool initialized_;                        //!> True when class has been initialized
+  Params params_;                         //!> Stores parameters
+  State state_;                           //!> Stores the state after every hash computation
+  cv::Size img_size_;                     //!> Image size (only needed for bucketing)
+  std::vector< std::vector<float> > r_;   //!> Vector of random values
+  bool initialized_;                      //!> True when class has been initialized
+  Publisher pub_;                         //!> The publisher for debugging purposes
 };
 
-} // namespace
+}  // namespace haloc
 
-#endif // HASH_H
+#endif  // LIBHALOC_INCLUDE_LIBHALOC_HASH_H_

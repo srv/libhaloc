@@ -1,191 +1,243 @@
+//  Copyright (c) 2017 Universitat de les Illes Balears
+//  This file is part of LIBHALOC.
+//
+//  LIBHALOC is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  LIBHALOC is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with LIBHALOC. If not, see <http://www.gnu.org/licenses/>.
+
 #include <ros/ros.h>
+
 #include "libhaloc/hash.h"
+
 #include <opencv2/core/eigen.hpp>
 
-
-/** \brief Parameter constructor. Sets the parameter struct to default values.
-  */
 haloc::Hash::Params::Params() :
-  num_proj(DEFAULT_NUM_PROJ)
+  bucket_rows(DEFAULT_BUCKET_ROWS), bucket_cols(DEFAULT_BUCKET_COLS),
+  max_desc(DEFAULT_MAX_DESC), num_proj(DEFAULT_NUM_PROJ)
 {}
 
-/** \brief Hash class constructor
-  */
-haloc::Hash::Hash()
-{
-  // Initializations
-  h_size_ = -1;
-  initialized_ = false;
+haloc::Hash::Hash() : initialized_(false) {}
+
+void haloc::Hash::GetBucketedHash(
+    const std::vector<cv::KeyPoint>& kp, const cv::Mat& desc,
+    const cv::Size& img_size) {
+  // Initialize first time
+  if (!IsInitialized()) Init(img_size, kp.size());
+  state_.Clear();
+
+  // Bucket descriptors
+  std::vector<cv::Mat> bucket_desc = BucketDescriptors(kp, desc);
 }
 
-/** \brief Return true if the class has been initialized
-  * @return
-  */
-bool haloc::Hash::isInitialized()
-{
-  return initialized_;
-}
+std::vector<float> haloc::Hash::GetHash(const cv::Mat& desc) {
+  // Initialize first time
+  if (!IsInitialized()) Init(cv::Size(0, 0), desc.rows);
+  state_.Clear();
 
-/** \brief Sets the class parameters
-  * @return
-  * \param stuct of parameters
-  */
-void haloc::Hash::setParams(const Params& params)
-{
-  params_ = params;
-}
+  // Initialize output
+  std::vector<float> hash;
 
-// Class initialization
-void haloc::Hash::init(Mat desc)
-{
-  // Create the random projections vectors
-  initProjections(desc.rows);
+  // Sanity checks
+  if (desc.rows == 0) {
+    ROS_ERROR("[Haloc:] ERROR -> Descriptor matrix is empty.");
+    return hash;
+  }
 
-  // Set the size of the descriptors
-  h_size_ = params_.num_proj * desc.cols;
-
-  // Set initialized to true
-  initialized_ = true;
-}
-
-/** \brief Compute the hash
-  * @return hash vector
-  * \param cvMat containing the descriptors of the image
-  */
-vector<float> haloc::Hash::getHash(Mat desc)
-{
-  // Initialize the histogram with 0's
-  vector<float> hash(h_size_, 0.0);
-
-  // Sanity check
-  if (desc.rows == 0) return hash;
+  if (desc.rows > r_[0].size()) {
+    ROS_ERROR_STREAM("[Haloc:] ERROR -> The number of descriptors is " <<
+      "larger than the size of the projection vector. This should not happen.");
+    return hash;
+  }
 
   // Project the descriptors
-  uint k = 0;
-  for (uint i=0; i<r_.size(); i++)
-  {
-    for (int n=0; n<desc.cols; n++)
-    {
+  for (uint i=0; i < r_.size(); i++) {
+    for (int n=0; n < desc.cols; n++) {
       float desc_sum = 0.0;
-      for (uint m=0; m<desc.rows; m++)
+      for (uint m=0; m < desc.rows; m++)
         desc_sum += r_[i][m]*desc.at<float>(m, n);
 
-      hash[k] = desc_sum/(float)desc.rows;
-      k++;
+      hash.push_back(desc_sum/static_cast<float>(desc.rows));
     }
   }
 
   return hash;
 }
 
-/** \brief Compute the random vector/s needed to generate the hash
-  * @return
-  * \param size of the initial descriptor matrix.
-  * \param true to generate 'n' random orthogonal projections, false to generate 'n' random non-orthogonal projections.
-  */
-void haloc::Hash::initProjections(int desc_size)
-{
+float haloc::Hash::Match(const std::vector<float>& hash_1,
+    const std::vector<float>& hash_2) {
+  // Compute the distance
+  float sum = 0.0;
+  for (uint i=0; i < hash_1.size(); i++)
+    sum += fabs(hash_1[i] - hash_2[i]);
+  return sum;
+}
+
+void haloc::Hash::PublishState(const cv::Mat& img) {
+  pub_.PublishBucketedImage(state_, img);
+}
+
+void haloc::Hash::Init(const cv::Size& img_size, const int& num_feat) {
+  InitProjections(params_.max_desc);
+  img_size_ = img_size;
+
+  // Sanity check
+  if (params_.max_desc < num_feat * 0.7) {
+    ROS_WARN_STREAM("[Haloc:] WARNING -> Please setup the maximum number " <<
+      "descriptors correctly. The current image has " << num_feat << " and " <<
+      "the max_desc param is " << params_.max_desc << ". The parameter for " <<
+      "the maximum number of descriptors must be smaller than the number" <<
+      "of real features in the images.");
+  }
+
+  initialized_ = true;
+}
+
+void haloc::Hash::InitProjections(const int& desc_size) {
   // Initializations
-  int seed = time(NULL);
+  uint seed = static_cast<uint>(time(NULL));
   r_.clear();
 
-  // The size of the descriptors may vary... We multiply the current descriptor size
-  // for a scalar to handle the larger cases.
-  int v_size = 6*desc_size;
+  // The size of the descriptors may vary... We multiply the current descriptor
+  // size for a scalar to handle the larger cases.
+  int v_size = desc_size;
 
   // We will generate N-orthogonal vectors creating a linear system of type Ax=b.
   // Generate a first random vector
-  vector<float> r = compute_random_vector(seed, v_size);
-  r_.push_back(unit_vector(r));
+  std::vector<float> r = ComputeRandomVector(v_size, seed);
+  r_.push_back(UnitVector(r));
 
   // Generate the set of orthogonal vectors
-  for (uint i=1; i<params_.num_proj; i++)
-  {
+  for (uint i=1; i < params_.num_proj; i++) {
     // Generate a random vector of the correct size
-    vector<float> new_v = compute_random_vector(seed + i, v_size - i);
+    std::vector<float> new_v = ComputeRandomVector(v_size - i, seed + i);
 
     // Get the right terms (b)
-    VectorXf b(r_.size());
-    for (uint n=0; n<r_.size(); n++)
-    {
-      vector<float> cur_v = r_[n];
+    Eigen::VectorXf b(r_.size());
+    for (uint n=0; n < r_.size(); n++) {
+      std::vector<float> cur_v = r_[n];
       float sum = 0.0;
-      for (uint m=0; m<new_v.size(); m++)
-      {
+      for (uint m=0; m < new_v.size(); m++)
         sum += new_v[m]*cur_v[m];
-      }
       b(n) = -sum;
     }
 
     // Get the matrix of equations (A)
-    MatrixXf A(i, i);
-    for (uint n=0; n<r_.size(); n++)
-    {
-      uint k=0;
-      for (uint m=r_[n].size()-i; m<r_[n].size(); m++)
-      {
-        A(n,k) = r_[n][m];
+    Eigen::MatrixXf A(i, i);
+    for (uint n=0; n < r_.size(); n++) {
+      uint k = 0;
+      for (uint m=r_[n].size()-i; m < r_[n].size(); m++) {
+        A(n, k) = r_[n][m];
         k++;
       }
     }
 
     // Apply the solver
-    VectorXf x = A.colPivHouseholderQr().solve(b);
+    Eigen::VectorXf x = A.colPivHouseholderQr().solve(b);
 
     // Add the solutions to the new vector
-    for (uint n=0; n<r_.size(); n++)
+    for (uint n=0; n < r_.size(); n++)
       new_v.push_back(x(n));
-    new_v = unit_vector(new_v);
+    new_v = UnitVector(new_v);
 
     // Push the new vector
     r_.push_back(new_v);
   }
 }
 
-/** \brief Computes a random vector of some size
-  * @return random vector
-  * \param seed to generate the random values
-  * \param desired size
-  */
-vector<float> haloc::Hash::compute_random_vector(uint seed, int size)
-{
-  srand(seed);
-  vector<float> h;
-  for (int i=0; i<size; i++)
-    h.push_back( (float)rand()/RAND_MAX );
+std::vector<float> haloc::Hash::ComputeRandomVector(const int& size, uint seed) {
+  std::vector<float> h;
+  for (int i=0; i < size; i++)
+    h.push_back(static_cast<float>(rand_r(&seed)/RAND_MAX));
   return h;
 }
 
-/** \brief Make a vector unit
-  * @return the "unitized" vector
-  * \param the "non-unitized" vector
-  */
-vector<float> haloc::Hash::unit_vector(vector<float> x)
-{
+std::vector<float> haloc::Hash::UnitVector(const std::vector<float>& x) {
   // Compute the norm
   float sum = 0.0;
-  for (uint i=0; i<x.size(); i++)
+  for (uint i=0; i < x.size(); i++)
     sum += pow(x[i], 2.0);
   float x_norm = sqrt(sum);
 
   // x^ = x/|x|
-  for (uint i=0; i<x.size(); i++)
-    x[i] = x[i] / x_norm;
+  std::vector<float> out;
+  for (uint i=0; i < x.size(); i++)
+    out.push_back(x[i] / x_norm);
 
-  return x;
+  return out;
 }
 
-/** \brief Compute the distance between 2 hashes
-  * @return the distance
-  * \param hash 1
-  * \param hash 2
-  */
-float haloc::Hash::match(vector<float> hash_1, vector<float> hash_2)
-{
-  // Compute the distance
-  float sum = 0.0;
-  for (uint i=0; i<hash_1.size(); i++)
-    sum += fabs(hash_1[i] - hash_2[i]);
+std::vector<cv::Mat> haloc::Hash::BucketDescriptors(
+    const std::vector<cv::KeyPoint>& kp, const cv::Mat& desc) {
+  // Find max values
+  float u_max = 0;
+  float v_max = 0;
+  std::vector<cv::KeyPoint> kp_in = kp;
+  for (std::vector<cv::KeyPoint>::iterator it = kp_in.begin();
+      it != kp_in.end(); it++) {
+    if (it->pt.x > u_max) u_max = it->pt.x;
+    if (it->pt.y > v_max) v_max = it->pt.y;
+  }
 
-  return sum;
+  // Compute width and height of the buckets
+  float bucket_width  = img_size_.width / params_.bucket_cols;
+  float bucket_height = img_size_.height / params_.bucket_rows;
+  state_.bucket_width = bucket_width;
+  state_.bucket_height = bucket_height;
+
+  // Allocate number of buckets needed
+  std::vector<cv::Mat> desc_buckets(params_.bucket_cols*params_.bucket_rows);
+  std::vector< std::vector<cv::KeyPoint> > kp_buckets(
+    params_.bucket_cols*params_.bucket_rows);
+
+  // Assign descriptors to their buckets
+  for (uint i=0; i < kp_in.size(); ++i) {
+    int u = static_cast<int>(floor(kp_in[i].pt.x/bucket_width));
+    int v = static_cast<int>(floor(kp_in[i].pt.y/bucket_height));
+
+    desc_buckets[v*params_.bucket_cols+u].push_back(desc.row(i));
+    kp_buckets[v*params_.bucket_cols+u].push_back(kp_in[i]);
+  }
+
+  // The maximum number of features per bucket
+  int max_features_x_bucket = static_cast<int>(
+    floor(params_.max_desc/(params_.bucket_cols*params_.bucket_rows)));
+
+  // Select the best keypoints for each bucket
+  std::vector<cv::Mat> out_desc(params_.bucket_cols*params_.bucket_rows);
+  for (int i=0; i < params_.bucket_cols*params_.bucket_rows; ++i) {
+    // Sort keypoints by response
+    std::vector<cv::KeyPoint> cur_kps = kp_buckets[i];
+    std::vector<int> index(cur_kps.size(), 0);
+    for (uint j=0; j<index.size(); j++) {
+      index[j] = j;
+    }
+    std::sort(index.begin(), index.end(), [&](const int& a, const int& b) {
+      return (cur_kps[a].response > cur_kps[b].response);
+    });
+
+    // Add up to max_features_x_bucket features from this bucket
+    int k = 0;
+    for (uint j=0; j < cur_kps.size(); ++j) {
+      if (k < max_features_x_bucket) {
+        out_desc[i].push_back(desc_buckets[i].row(index[j]));
+        state_.bucketed_kp.push_back(kp_buckets[i][index[j]]);
+        cv::KeyPoint tmp = kp_buckets[i][index[j]];
+
+      } else {
+        state_.unbucketed_kp.push_back(kp_buckets[i][index[j]]);
+      }
+      k++;
+    }
+  }
+
+  return out_desc;
 }
