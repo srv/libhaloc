@@ -20,37 +20,16 @@
 #include <ros/ros.h>
 #include <sensor_msgs/Image.h>
 #include <cv_bridge/cv_bridge.h>
+#include <std_msgs/String.h>
 
 #include <vector>
+
+#include "libhaloc/state.h"
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/features2d/features2d.hpp>
 
 namespace haloc {
-
-/**
- * @brief      Struct to save operational variables after every hash
- *             computation.
- */
-struct State {
-  /**
-   * @brief      Default constructor.
-   */
-  State();
-
-  void Clear() {
-    bucketed_kp.clear();
-    unbucketed_kp.clear();
-    bucket_width = 0;
-    bucket_height = 0;
-  }
-
-  // State variables
-  std::vector<cv::KeyPoint> bucketed_kp;    //!> Stores the bucketed keypoints
-  std::vector<cv::KeyPoint> unbucketed_kp;  //!> Stores the discarded keypoints when bucketing
-  float bucket_width;                       //!> Stores the bucket width
-  float bucket_height;                      //!> Stores the bucket height
-};
 
 class Publisher {
  public:
@@ -62,26 +41,41 @@ class Publisher {
   /**
    * @brief      Publishes the bucketed image.
    *
-   * @param[in]  state  The state obtained after a hash computation.
-   * @param[in]  img    The original image.
+   * @param[in]  state        The state obtained after a hash computation.
+   * @param[in]  img          The original image.
+   * @param[in]  bucket_rows  The bucket rows
+   * @param[in]  bucket_cols  The bucket cols
    */
-  void PublishBucketedImage(const State& state, const cv::Mat& img);
+  void PublishBucketedImage(const State& state, const cv::Mat& img,
+    const int& bucket_rows, const int& bucket_cols);
+
+  /**
+   * @brief      Publishes the bucketed info
+   *
+   * @param[in]  state        The state obtained after a hash computation.
+   * @param[in]  max_feat     The maximum number of features per bucket
+   */
+  void PublishBucketedInfo(const State& state, const int& max_feat);
 
  protected:
   /**
    * @brief      Returns a debug image with the bucketed keypoints.
    *
-   * @param[in]  state  The state obtained after a hash computation.
-   * @param[in]  img    The original image.
+   * @param[in]  state        The state obtained after a hash computation.
+   * @param[in]  img          The original image.
+   * @param[in]  bucket_rows  The bucket rows
+   * @param[in]  bucket_cols  The bucket cols
    *
    * @return     The bucketed image.
    */
-  cv::Mat BuildBucketedImage(const State& state, const cv::Mat& img);
+  cv::Mat BuildBucketedImage(const State& state, const cv::Mat& img,
+    const int& bucket_rows, const int& bucket_cols);
 
  private:
 
   // The ROS publishers
   ros::Publisher pub_bucketed_img_;
+  ros::Publisher pub_bucketed_info_;
 
 };
 

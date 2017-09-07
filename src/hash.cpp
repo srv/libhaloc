@@ -27,67 +27,95 @@ haloc::Hash::Params::Params() :
 
 haloc::Hash::Hash() : initialized_(false) {}
 
-void haloc::Hash::GetBucketedHash(
+std::vector<float> haloc::Hash::GetHash(
     const std::vector<cv::KeyPoint>& kp, const cv::Mat& desc,
     const cv::Size& img_size) {
   // Initialize first time
-  if (!IsInitialized()) Init(img_size, kp.size());
-  state_.Clear();
-
-  // Bucket descriptors
-  std::vector<cv::Mat> bucket_desc = BucketDescriptors(kp, desc);
-}
-
-std::vector<float> haloc::Hash::GetHash(const cv::Mat& desc) {
-  // Initialize first time
-  if (!IsInitialized()) Init(cv::Size(0, 0), desc.rows);
+  if (!IsInitialized()) Init(img_size, kp.size(), desc.cols);
   state_.Clear();
 
   // Initialize output
   std::vector<float> hash;
 
-  // Sanity checks
-  if (desc.rows == 0) {
-    ROS_ERROR("[Haloc:] ERROR -> Descriptor matrix is empty.");
-    return hash;
-  }
+  // The maximum number of features per bucket
+  int max_features_x_bucket = static_cast<int>(
+    floor(params_.max_desc/(params_.bucket_cols*params_.bucket_rows)));
 
-  if (desc.rows > r_[0].size()) {
-    ROS_ERROR_STREAM("[Haloc:] ERROR -> The number of descriptors is " <<
-      "larger than the size of the projection vector. This should not happen.");
-    return hash;
-  }
+  // Bucket descriptors
+  std::vector<cv::Mat> bucket_desc = BucketDescriptors(kp, desc);
 
-  // Project the descriptors
-  for (uint i=0; i < r_.size(); i++) {
-    for (int n=0; n < desc.cols; n++) {
-      float desc_sum = 0.0;
-      for (uint m=0; m < desc.rows; m++)
-        desc_sum += r_[i][m]*desc.at<float>(m, n);
-
-      hash.push_back(desc_sum/static_cast<float>(desc.rows));
+  // Get a hash for every bucket
+  const int min_feat = static_cast<int>(0.7 * max_features_x_bucket);
+  for (uint i=0; i < bucket_desc.size(); ++i) {
+    std::vector<float> bucketed_hash;
+    if (bucket_desc[i].rows >= min_feat) {
+      bucketed_hash = ProjectDescriptors(bucket_desc[i]);
+    } else {
+      for (uint i=0; i < desc.cols*params_.num_proj; ++i)
+        bucketed_hash.push_back(0.0);
     }
+    hash.insert(hash.end(), bucketed_hash.begin(), bucketed_hash.end());
   }
-
   return hash;
 }
 
-float haloc::Hash::Match(const std::vector<float>& hash_1,
-    const std::vector<float>& hash_2) {
+int haloc::Hash::CalcDist(const std::vector<float>& hash_a,
+    const std::vector<float>& hash_b, float eps) {
+  // Init
+  const int num_buckets = params_.bucket_cols*params_.bucket_rows;
+  // const float eps = 0.6;
+  int num_buckets_overlap = 0;
+
   // Compute the distance
-  float sum = 0.0;
-  for (uint i=0; i < hash_1.size(); i++)
-    sum += fabs(hash_1[i] - hash_2[i]);
-  return sum;
+  for (uint i=0; i < comb_.size(); ++i) {
+    int comb_overlap = 0;
+    for (uint j=0; j < num_buckets; ++j) {
+      int idx_a = comb_[i][j].first  * params_.num_proj * desc_length_;
+      int idx_b = comb_[i][j].second * params_.num_proj * desc_length_;
+
+      // Check if buckets are empty
+      std::vector<float>::const_iterator a_first = hash_a.begin() + idx_a;
+      std::vector<float>::const_iterator a_last = hash_a.begin() + idx_a +
+        desc_length_*params_.num_proj;
+      float sum_a = std::accumulate(a_first, a_last, 0.0);
+      if (sum_a == 0.0) continue;
+
+      std::vector<float>::const_iterator b_first = hash_b.begin() + idx_b;
+      std::vector<float>::const_iterator b_last = hash_b.begin() + idx_b +
+        desc_length_*params_.num_proj;
+      float sum_b = std::accumulate(b_first, b_last, 0.0);
+      if (sum_b == 0.0) continue;
+
+      float proj_sum = 0.0;
+      for (uint k=0; k < desc_length_*params_.num_proj; ++k) {
+        proj_sum += fabs(hash_a[idx_a+k] - hash_b[idx_b+k]);
+      }
+      if (proj_sum <= eps) comb_overlap++;
+    }
+    if (comb_overlap > num_buckets_overlap) {
+      num_buckets_overlap = comb_overlap;
+    }
+  }
+  return num_buckets_overlap;
 }
 
 void haloc::Hash::PublishState(const cv::Mat& img) {
-  pub_.PublishBucketedImage(state_, img);
+  // The bucketed image
+  pub_.PublishBucketedImage(state_, img, params_.bucket_rows,
+    params_.bucket_cols);
+
+  // The bucketed info
+  int max_features_x_bucket = static_cast<int>(
+    floor(params_.max_desc/(params_.bucket_cols*params_.bucket_rows)));
+  pub_.PublishBucketedInfo(state_, max_features_x_bucket);
 }
 
-void haloc::Hash::Init(const cv::Size& img_size, const int& num_feat) {
+void haloc::Hash::Init(const cv::Size& img_size, const int& num_feat,
+    const int& desc_length) {
   InitProjections(params_.max_desc);
+  InitCombinations();
   img_size_ = img_size;
+  desc_length_ = desc_length;
 
   // Sanity check
   if (params_.max_desc < num_feat * 0.7) {
@@ -101,16 +129,38 @@ void haloc::Hash::Init(const cv::Size& img_size, const int& num_feat) {
   initialized_ = true;
 }
 
+void haloc::Hash::InitCombinations() {
+  comb_.clear();
+  int num_buckets = params_.bucket_cols*params_.bucket_rows;
+  int second_idx_shift = 0;
+  for (uint i=0; i < num_buckets; ++i) {
+    std::vector< std::pair<int, int> > combinations_row;
+    for (uint j=0; j < num_buckets; ++j) {
+      int second_idx = j + second_idx_shift;
+      if (second_idx > num_buckets-1) {
+        second_idx = second_idx - num_buckets;
+      }
+      combinations_row.push_back(std::make_pair(j, second_idx));
+    }
+    comb_.push_back(combinations_row);
+    second_idx_shift++;
+  }
+}
+
 void haloc::Hash::InitProjections(const int& desc_size) {
   // Initializations
-  uint seed = static_cast<uint>(time(NULL));
+  int seed = time(NULL);
   r_.clear();
 
-  // The size of the descriptors may vary... We multiply the current descriptor
-  // size for a scalar to handle the larger cases.
-  int v_size = desc_size;
+  // The maximum number of features per bucket
+  int max_features_x_bucket = static_cast<int>(
+    floor(params_.max_desc/(params_.bucket_cols*params_.bucket_rows)));
 
-  // We will generate N-orthogonal vectors creating a linear system of type Ax=b.
+  // The size of the descriptors may vary...
+  // But, we limit the number of descriptors per bucket.
+  int v_size = max_features_x_bucket;
+
+  // We will generate N-orthogonal vectors creating a linear system of type Ax=b
   // Generate a first random vector
   std::vector<float> r = ComputeRandomVector(v_size, seed);
   r_.push_back(UnitVector(r));
@@ -153,10 +203,10 @@ void haloc::Hash::InitProjections(const int& desc_size) {
   }
 }
 
-std::vector<float> haloc::Hash::ComputeRandomVector(const int& size, uint seed) {
+std::vector<float> haloc::Hash::ComputeRandomVector(const int& size, int seed) {
   std::vector<float> h;
   for (int i=0; i < size; i++)
-    h.push_back(static_cast<float>(rand_r(&seed)/RAND_MAX));
+    h.push_back((float)rand()/RAND_MAX);
   return h;
 }
 
@@ -190,8 +240,6 @@ std::vector<cv::Mat> haloc::Hash::BucketDescriptors(
   // Compute width and height of the buckets
   float bucket_width  = img_size_.width / params_.bucket_cols;
   float bucket_height = img_size_.height / params_.bucket_rows;
-  state_.bucket_width = bucket_width;
-  state_.bucket_height = bucket_height;
 
   // Allocate number of buckets needed
   std::vector<cv::Mat> desc_buckets(params_.bucket_cols*params_.bucket_rows);
@@ -226,18 +274,53 @@ std::vector<cv::Mat> haloc::Hash::BucketDescriptors(
 
     // Add up to max_features_x_bucket features from this bucket
     int k = 0;
+    int num_kp = 0;
     for (uint j=0; j < cur_kps.size(); ++j) {
       if (k < max_features_x_bucket) {
         out_desc[i].push_back(desc_buckets[i].row(index[j]));
         state_.bucketed_kp.push_back(kp_buckets[i][index[j]]);
-        cv::KeyPoint tmp = kp_buckets[i][index[j]];
-
+        num_kp++;
       } else {
         state_.unbucketed_kp.push_back(kp_buckets[i][index[j]]);
       }
       k++;
     }
+    state_.num_kp_per_bucket.push_back(num_kp);
   }
 
   return out_desc;
+}
+
+std::vector<float> haloc::Hash::ProjectDescriptors(const cv::Mat& desc) {
+  // Initialize first time
+  if (!IsInitialized()) Init(cv::Size(0, 0), desc.rows, desc.cols);
+
+  // Initialize output
+  std::vector<float> hash;
+
+  // Sanity checks
+  if (desc.rows == 0) {
+    ROS_ERROR("[Haloc:] ERROR -> Descriptor matrix is empty.");
+    return hash;
+  }
+
+  if (desc.rows > r_[0].size()) {
+    ROS_ERROR_STREAM("[Haloc:] ERROR -> The number of descriptors is " <<
+      "larger than the size of the projection vector. This should not happen.");
+    return hash;
+  }
+
+  // Project the descriptors
+  for (uint i=0; i < r_.size(); i++) {
+    for (int n=0; n < desc.cols; n++) {
+      float desc_sum = 0.0;
+      for (uint m=0; m < desc.rows; m++) {
+        float projected = r_[i][m]*desc.at<float>(m, n);
+        float projected_normalized = (projected + 1.0) / 2.0;
+        desc_sum += projected_normalized;
+      }
+      hash.push_back(desc_sum / static_cast<float>(desc.rows));
+    }
+  }
+  return hash;
 }
